@@ -142,3 +142,7 @@ POST /game/cashout
 * WebSocket Connection: /game/ws/{lobbyId}
    * Description: Provides real-time game updates via WebSocket connection for users in a lobby.
 
+## Deployment & Scaling
+ * Docker to containerize each microservice in order to ensure that each service can run independently in a Docker container.
+ * Kubernetes for managing the deployment, scaling, and load balancing. This will allow you to automatically scale the microservices based on demand.
+
