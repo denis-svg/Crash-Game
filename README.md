@@ -140,5 +140,5 @@ POST /game/cashout
 ```
 
 * WebSocket Connection: /game/ws/{lobbyId}
-** Description: Provides real-time game updates via WebSocket connection for users in a lobby.
+   * Description: Provides real-time game updates via WebSocket connection for users in a lobby.
 
