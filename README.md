@@ -6,6 +6,12 @@ In a crash gamble game, different parts of the system can experience varying lev
 
 Microservices also facilitate independent development, allowing teams to work on distinct features without causing disruptions. For example, the crash game’s lobby system can be maintained by a dedicated team that can deploy updates, introduce new game modes, or address bugs without affecting other critical services, such as the payment gateway or real-time gameplay engine. This allows for faster iterations and continuous improvement, ensuring a smooth user experience.
 
+Netflix Video Processing Pipeline with Microservices (https://netflixtechblog.com/rebuilding-netflix-video-processing-pipeline-with-microservices-4e5e6310e359)
+Starting in 2014, netflix developed and operated the video processing pipeline on their third-generation platform Reloaded. 
+Reloaded was initially designed as a monolithic system for converting high-quality media files into streaming assets for Netflix. Over time, its complexity grew as new functionalities were added, leading to tightly coupled modules, long release cycles, and development inefficiencies. This structure made it difficult to introduce new features, slowed down development, and ultimately hindered innovation.
+
+In 2018, Netflix developed Cosmos, a media-centric microservices platform designed to improve flexibility and feature development velocity over the monolithic Reloaded system. Cosmos employs microservices, each focused on a specific function in the media pipeline, such as Video Encoding Service (VES) and Video Quality Service (VQS), to decouple complex processes like encoding and quality assessment. Each service operates independently, and service orchestration is customized for two main use cases: member streaming, which focuses on high-quality, scalable video assets, and studio operations, which prioritize fast turnaround for production needs. This architecture enhances scalability, experimentation, and innovation.
+
 ## Service Boundaries
 ![arhitecture](https://github.com/user-attachments/assets/cac8578b-bcc6-47d5-bef7-f5264aa24838)
 
