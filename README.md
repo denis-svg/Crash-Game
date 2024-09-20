@@ -13,7 +13,7 @@ Reloaded was initially designed as a monolithic system for converting high-quali
 In 2018, Netflix developed Cosmos, a media-centric microservices platform designed to improve flexibility and feature development velocity over the monolithic Reloaded system. Cosmos employs microservices, each focused on a specific function in the media pipeline, such as Video Encoding Service (VES) and Video Quality Service (VQS), to decouple complex processes like encoding and quality assessment. Each service operates independently, and service orchestration is customized for two main use cases: member streaming, which focuses on high-quality, scalable video assets, and studio operations, which prioritize fast turnaround for production needs. This architecture enhances scalability, experimentation, and innovation.
 
 ## Service Boundaries
-![Untitled Diagram drawio(3)](https://github.com/user-attachments/assets/9ea2b23a-032b-4ac3-ab85-25052394060f)
+![444444444444](https://github.com/user-attachments/assets/69c58771-9e20-46ae-b5a2-3ccae60f76a1)
 
 ## Data Management
 
@@ -94,59 +94,57 @@ GET /game/lobbies
   }
 ]
 ```
+### Websockets
+/web_socket/<lobby_id>/
+Join a Lobby
 
-POST /web_socket/<lobby_id>/join
 ```json
 {
-  "lobbyId": "lobby123",
+  "action": "join",
   "userId": "user123",
+  "lobbyId": "lobby123",
   "status": "joined"
-
-```
-
-POST /web_socket/lobby/leave
-
-POST /game/start
-```json
-{
-  "lobbyId": "lobby123",
-  "gameId": "game789",
-  "status": "started"
 }
 ```
 
-GET /web_socket/status/{gameId}
+Place a Bet
+
 ```json
 {
-  "gameId": "game789",
-  "lobbyId": "lobby123",
-  "currentMultiplier": 2.5,
-  "status": "in-progress"
-}
-```
-POST /web_socket/bet
-```
-{
-  "gameId": "game789",
+  "action": "bet",
   "userId": "user123",
+  "lobbyId": "lobby123",
+  "gameId": "game789",
   "betAmount": 100,
   "status": "bet placed"
 }
 ```
 
-POST /web_socket/cashout
-```
+Receive Game Status Updates
+
+```json
 {
+  "action": "statusUpdate",
+  "lobbyId": "lobby123",
   "gameId": "game789",
+  "currentMultiplier": 2.5,
+  "status": "in-progress"
+}
+```
+
+Cash Out
+
+```json
+{
+  "action": "cashout",
   "userId": "user123",
+  "gameId": "game789",
   "multiplier": 3.2,
   "payout": 320,
   "status": "cashed out"
 }
 ```
 
-* WebSocket Connection: /web_socket/ws/{lobbyId}
-   * Description: Provides real-time game updates via WebSocket connection for users in a lobby.
 
 ## Deployment & Scaling
  * Docker to containerize each microservice in order to ensure that each service can run independently in a Docker container.
