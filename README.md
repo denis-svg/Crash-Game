@@ -13,7 +13,7 @@ Reloaded was initially designed as a monolithic system for converting high-quali
 In 2018, Netflix developed Cosmos, a media-centric microservices platform designed to improve flexibility and feature development velocity over the monolithic Reloaded system. Cosmos employs microservices, each focused on a specific function in the media pipeline, such as Video Encoding Service (VES) and Video Quality Service (VQS), to decouple complex processes like encoding and quality assessment. Each service operates independently, and service orchestration is customized for two main use cases: member streaming, which focuses on high-quality, scalable video assets, and studio operations, which prioritize fast turnaround for production needs. This architecture enhances scalability, experimentation, and innovation.
 
 ## Service Boundaries
-![arhitecture](https://github.com/user-attachments/assets/cac8578b-bcc6-47d5-bef7-f5264aa24838)
+![Untitled Diagram drawio(3)](https://github.com/user-attachments/assets/9ea2b23a-032b-4ac3-ab85-25052394060f)
 
 ## Data Management
 
@@ -95,7 +95,7 @@ GET /game/lobbies
 ]
 ```
 
-POST /game/lobby/join
+POST /web_socket/<lobby_id>/join
 ```json
 {
   "lobbyId": "lobby123",
@@ -104,7 +104,7 @@ POST /game/lobby/join
 
 ```
 
-POST /game/lobby/leave
+POST /web_socket/lobby/leave
 
 POST /game/start
 ```json
@@ -115,7 +115,7 @@ POST /game/start
 }
 ```
 
-GET /game/status/{gameId}
+GET /web_socket/status/{gameId}
 ```json
 {
   "gameId": "game789",
@@ -124,7 +124,7 @@ GET /game/status/{gameId}
   "status": "in-progress"
 }
 ```
-POST /game/bet
+POST /web_socket/bet
 ```
 {
   "gameId": "game789",
@@ -134,7 +134,7 @@ POST /game/bet
 }
 ```
 
-POST /game/cashout
+POST /web_socket/cashout
 ```
 {
   "gameId": "game789",
@@ -145,7 +145,7 @@ POST /game/cashout
 }
 ```
 
-* WebSocket Connection: /game/ws/{lobbyId}
+* WebSocket Connection: /web_socket/ws/{lobbyId}
    * Description: Provides real-time game updates via WebSocket connection for users in a lobby.
 
 ## Deployment & Scaling
