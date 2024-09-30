@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: '1111'  # Root password
+      MYSQL_DATABASE: 'auth_db'  # The database to be created
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app_network
+
+  # First Flask service instance
+  flask_service_1:
+    build:
+      context: .  # Use the current directory to build the image
+    ports:
+      - "5000:5000"  # Map host port 5000 to container port 5000
+    depends_on:
+      - mysql  # Ensure MySQL starts before Flask
+    networks:
+      - app_network
+
+  # Second Flask service instance
+  flask_service_2:
+    build:
+      context: .  # Use the current directory to build the image
+    ports:
+      - "5001:5000"  # Map host port 5001 to container port 5000
+    depends_on:
+      - mysql  # Ensure MySQL starts before Flask
+    networks:
+      - app_network
+
+# Define the shared network
+networks:
+  app_network:
+    driver: bridge
+
+# Define named volumes for the MySQL data
+volumes:
+  mysql_data:
