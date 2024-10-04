@@ -65,7 +65,7 @@ def get_balance():
 # Update user balance (requires authentication)
 @app.route('/user/v1/balance', methods=['POST'])
 @jwt_required()
-def update_balance():
+def set_balance():
     data = request.json
     new_balance = data.get('balance')
 
@@ -77,6 +77,26 @@ def update_balance():
     
     if user:
         user.balance = new_balance
+        db.session.commit()
+        return jsonify({"message": "Balance updated"}), 200
+
+    return jsonify({"error": "User not found"}), 404
+
+# Update user balance (requires authentication)
+@app.route('/user/v1/balance', methods=['PUT'])
+@jwt_required()
+def update_balance():
+    data = request.json
+    ammount = data.get('ammount')
+
+    if ammount is None:
+        return jsonify({"error": "Ammount is required"}), 400
+
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    if user:
+        user.balance += ammount
         db.session.commit()
         return jsonify({"message": "Balance updated"}), 200
 
