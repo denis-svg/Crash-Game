@@ -24,8 +24,13 @@ rooms = {}
 # Dictionary to track players who requested to withdraw from their bet
 withdrawals = {}
 
+
+@app.route('/game/v1/status', methods=['GET'])
+def status():
+    return jsonify({"status": "Game Service Running"}), 200
+
 # Route to join or create a lobby via HTTP
-@app.route('/lobby', methods=['POST'])
+@app.route('/game/v1/lobby', methods=['POST'])
 def join_lobby():
     data = request.json
     lobby_id = data.get('lobby_id')
@@ -50,7 +55,7 @@ def join_lobby():
         'lobby_id': lobby_id,
     })
 
-@app.route('/lobby/<int:lobby_id>', methods=['GET'])
+@app.route('/game/v1/lobby/<int:lobby_id>', methods=['GET'])
 def get_lobby(lobby_id):
     lobby = db.session.get(Lobby, lobby_id)
     if not lobby:
@@ -110,7 +115,6 @@ def handle_place_bet(data):
 def handle_withdraw(data):
     user_id = data['user_id']
     lobby_id = data['lobby_id']
-    print(user_id, lobby_id)
     
     # Check if the user has already placed a bet in this lobby
     bet = Bet.query.filter_by(user_id=user_id, lobby_id=lobby_id, withdrawn=False).first()
@@ -201,4 +205,4 @@ def create_initial_hash():
     return initial_hash
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0', port=5000)

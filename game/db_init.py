@@ -3,7 +3,7 @@ import MySQLdb
 
 # Function to create the database if it doesn't exist
 def create_database_if_not_exists():
-    db = MySQLdb.connect(host="localhost", user="root", passwd="1111")
+    db = MySQLdb.connect(host="mysql_game", user="root", passwd="1111")
 
     c = db.cursor()
     c.execute(f"CREATE DATABASE IF NOT EXISTS game_db")
