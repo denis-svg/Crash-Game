@@ -86,11 +86,19 @@ def handle_connect():
 @socketio.on('joinRoom')
 def handle_join_room(data):
     lobby_id = data['lobby_id']
+    user_id = request.sid  # Use request.sid as user identifier
+
     print(data)
 
-    # Store the room in Redis
-    redis_client.sadd(f"room:{lobby_id}", request.sid)
+    # Remove the user from all existing rooms
+    existing_rooms = redis_client.smembers(f"room:{user_id}")
+    for room in existing_rooms:
+        redis_client.srem(f"room:{room}", user_id)
+
+    # Store the new room in Redis
+    redis_client.sadd(f"room:{lobby_id}", user_id)
     print(redis_client.smembers(f"room:{lobby_id}"))
+    
     emit(f'Joined room: {lobby_id}', room=request.sid)
 
 @socketio.on('place_bet')
@@ -192,7 +200,7 @@ def start_game(lobby_id):
         
         # Emit rising coefficient until the crash point is reached
         while rising_coefficient <= crash_point:
-            time.sleep(0.1)
+            time.sleep(0.05)
             
             # Check for withdrawal requests in Redis
             user_ids = redis_client.smembers(f"room:{lobby_id}")
@@ -281,4 +289,14 @@ def create_initial_hash():
     return initial_hash
 
 if __name__ == '__main__':
-    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0', port=5003)
+    import argparse
+    # Set up the argument parser
+    parser = argparse.ArgumentParser(description='Run the Flask app.')
+    parser.add_argument('--port', type=int, default=5003, help='Port number to run the Flask app on')
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Access the port number
+    port = args.port
+    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0', port=port)
