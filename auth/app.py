@@ -82,5 +82,15 @@ def update_balance():
 
     return jsonify({"error": "User not found"}), 404
 
+@app.route('/user/v1/auth/validate', methods=['GET'])
+@jwt_required()
+def validate():
+    user_id = get_jwt_identity()  # Get the user's identity from the token
+    user = User.query.get(user_id)  # Retrieve the user from the database
+    
+    if user:
+        return jsonify({"status": "valid", "user_id": user.id, "username": user.username}), 200
+    return jsonify({"error": "User not found"}), 404
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
