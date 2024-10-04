@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crash Game Lobby</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js" integrity="sha512-luMnTJZ7oEchNDZAtQhgjomP1eZefnl82ruTH/3Oj/Yu5qYtwL7+dVRccACS/Snp1lFXq188XFipHKYE75IaQQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+    <h1>Crash Game Lobby</h1>
+
+    <!-- Lobby Section -->
+    <input id="lobbyId" placeholder="Enter lobby ID" />
+    <button onclick="joinLobby()">Join Lobby</button>
+    <br><br>
+
+    <!-- Betting Section -->
+    <input id="betAmount" placeholder="Enter bet amount" />
+    <input id="betCoefficient" placeholder="Enter auto-withdraw coefficient" />
+    <button onclick="placeBet()">Place Bet</button>
+    <br><br>
+
+    <!-- Withdraw Section -->
+    <button onclick="withdraw()">Withdraw Bet</button>
+    <br><br>
+
+    <!-- Coefficient Updates -->
+    <h2>Current Coefficient:</h2>
+    <div id="coefficientDisplay">1.00</div>
+
+    <!-- Bet Results -->
+    <h2>Bet Results:</h2>
+    <div id="betResults"></div>
+
+    <script>
+        const socket = io('http://127.0.0.1:5000');
+        let currentUserId;  // Store the current user ID
+
+        function joinLobby() {
+            const lobbyId = document.getElementById('lobbyId').value;
+            console.log(lobbyId);
+            socket.emit('joinRoom', { lobby_id: lobbyId });
+        }
+
+        socket.on('Joined room: 3', function(data) {
+            console.log("Joined room 3");
+        });
+
+        function placeBet() {
+            const lobbyId = document.getElementById('lobbyId').value;
+            const betAmount = document.getElementById('betAmount').value;
+            const betCoefficient = document.getElementById('betCoefficient').value;
+
+            currentUserId = Math.floor(Math.random() * 1000);  // Simulate a random user ID
+            socket.emit('place_bet', {
+                user_id: currentUserId,
+                lobby_id: lobbyId,
+                amount: betAmount,
+                coefficient: betCoefficient
+            });
+        }
+
+        function withdraw() {
+            const lobbyId = document.getElementById('lobbyId').value;
+            socket.emit('withdraw', {
+                user_id: currentUserId,  // Use the same user ID as the placed bet
+                lobby_id: lobbyId
+            });
+        }
+
+        socket.on('connected', function(data) {
+            console.log(data.message);
+        });
+
+        socket.on('coefficient_update', function(data) {
+            document.getElementById('coefficientDisplay').innerText = data.coefficient.toFixed(2);
+        });
+
+        socket.on('bet_placed', function(data) {
+            console.log('Bet placed:', data);
+        });
+
+        socket.on('bet_result', function(data) {
+            const betResultsDiv = document.getElementById('betResults');
+            betResultsDiv.innerHTML += `<p>User ${data.user_id} ${data.result === 'win' ? 'won' : 'lost'}! ${data.payout ? 'Payout: ' + data.payout : ''}</p>`;
+        });
+
+        socket.on('withdraw_requested', function(data) {
+            console.log('Withdraw requested for user:', data.user_id);
+        });
+
+        socket.on('error', function(data) {
+            alert(data.message);
+        });
+    </script>
+</body>
+</html>
