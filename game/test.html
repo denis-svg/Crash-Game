@@ -9,6 +9,10 @@
 <body>
     <h1>Crash Game Lobby</h1>
 
+    <!-- Token Input -->
+    <input id="token" placeholder="Enter Bearer Token" />
+    <br><br>
+
     <!-- Lobby Section -->
     <input id="lobbyId" placeholder="Enter lobby ID" />
     <button onclick="joinLobby()">Join Lobby</button>
@@ -33,7 +37,11 @@
     <div id="betResults"></div>
 
     <script>
-        const socket = io('http://127.0.0.1:5003');
+        const socket = io('http://127.0.0.1:5003', {
+            query: {
+                token: () => document.getElementById('token').value  // Send the token as a query parameter
+            }
+        });
         let currentUserId;  // Store the current user ID
 
         function joinLobby() {
@@ -50,21 +58,25 @@
             const lobbyId = document.getElementById('lobbyId').value;
             const betAmount = document.getElementById('betAmount').value;
             const betCoefficient = document.getElementById('betCoefficient').value;
+            const token = document.getElementById('token').value;  // Get the token from the input field
 
             currentUserId = Math.floor(Math.random() * 1000);  // Simulate a random user ID
             socket.emit('place_bet', {
                 user_id: currentUserId,
                 lobby_id: lobbyId,
                 amount: betAmount,
-                coefficient: betCoefficient
+                coefficient: betCoefficient,
+                token: token  // Include the token in the emitted data
             });
         }
 
         function withdraw() {
             const lobbyId = document.getElementById('lobbyId').value;
+            const token = document.getElementById('token').value;  // Get the token from the input field
             socket.emit('withdraw', {
                 user_id: currentUserId,  // Use the same user ID as the placed bet
-                lobby_id: lobbyId
+                lobby_id: lobbyId,
+                token: token  // Include the token in the emitted data
             });
         }
 

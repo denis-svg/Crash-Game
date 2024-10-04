@@ -23,4 +23,4 @@ COPY . /app
 EXPOSE 5000
 
 # Command to run the Flask app
-CMD ["sh", "-c", "python3 db_init.py && python3 app.py"]
+CMD ["python3", "db_init.py"]

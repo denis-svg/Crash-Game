@@ -9,6 +9,7 @@ import time
 import threading
 import os
 import redis
+import requests
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -16,11 +17,20 @@ app.config.from_object(Config)
 db.init_app(app)
 
 # Connect to Redis
-redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
+redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
 
 socketio = SocketIO(app, cors_allowed_origins='*')
 
 salt = "0000000000000000000fa3b65e43e4240d71762a5bf397d5304b2596d116859c"
+
+AUTH_SERVICE_URL = "http://127.0.0.1:5001"
+
+def validate_token(token):
+    """ Validate JWT token with the auth service and retrieve user information. """
+    response = requests.get(f"{AUTH_SERVICE_URL}/user/v1/auth/validate", headers={"Authorization": f"Bearer {token}"})
+    if response.status_code == 200:
+        return response.json()
+    return None
 
 @app.route('/game/v1/status', methods=['GET'])
 def status():
@@ -30,6 +40,14 @@ def status():
 @app.route('/game/v1/lobby', methods=['POST'])
 def join_lobby():
     data = request.json
+    token = request.headers.get('Authorization').split()[1] # Get token from headers
+    if not token:
+        return jsonify({"error": "Token is missing"}), 401
+    
+    user_info = validate_token(token)  # Validate token
+    if not user_info:
+        return jsonify({"error": "Invalid token"}), 401
+    
     lobby_id = data.get('lobby_id')
 
     # Check if lobby_id is provided and not None
@@ -77,10 +95,27 @@ def handle_join_room(data):
 
 @socketio.on('place_bet')
 def handle_place_bet(data):
-    user_id = data['user_id']
+    token = data['token']  # Get token from data
+    user_info = validate_token(token)  # Validate token
+    if not user_info:
+        emit('error', {'message': 'Invalid token'})
+        return
+    
+    user_id = user_info['user_id']
     lobby_id = data['lobby_id']
-    amount = data['amount']
+    amount = float(data['amount'])
     coefficient = data['coefficient']
+
+    # Check user balance
+    balance_response = requests.get(f"{AUTH_SERVICE_URL}/user/v1/balance", headers={"Authorization": f"Bearer {token}"})
+    if balance_response.status_code == 200:
+        balance = balance_response.json()['balance']
+        if amount > balance:
+            emit('error', {'message': 'Insufficient balance'})
+            return
+    else:
+        emit('error', {'message': 'Unable to check balance'})
+        return
 
     # Find the lobby in the database
     lobby = db.session.get(Lobby, lobby_id)
@@ -93,7 +128,20 @@ def handle_place_bet(data):
         emit('error', {'message': 'Cannot place a bet. The game is already in progress.'})
         return
 
-    # Store the bet in the database
+    # Calculate the total amount of bets the user has placed across all lobbies that are not withdrawn
+    user_bets = Bet.query.filter_by(user_id=user_id, withdrawn=False).all()
+    total_user_bets = sum(bet.amount for bet in user_bets)
+    print(total_user_bets)
+
+    # Ensure the new bet does not exceed the total of user's existing bets
+    if balance < total_user_bets + amount:  # Check if total_user_bets is less than the new bet amount
+        emit('error', {'message': 'The sum of all your bets cannot be lower than the bet you want to place.'})
+        return
+    
+    # Save the token in Redis with user_id as the key
+    redis_client.set(f"user_token:{user_id}", token)
+
+    # Store the bet in the database without the token
     bet = Bet(user_id=user_id, lobby_id=lobby_id, amount=amount, coefficient=coefficient)
     db.session.add(bet)
     db.session.commit()
@@ -108,23 +156,27 @@ def handle_place_bet(data):
 # Withdraw bet during the game
 @socketio.on('withdraw')
 def handle_withdraw(data):
-    user_id = data['user_id']
+    token = data['token']  # Get token from data
+    user_info = validate_token(token)  # Validate token
+    if not user_info:
+        emit('error', {'message': 'Invalid token'})
+        return
+
+    user_id = user_info['user_id']
     lobby_id = data['lobby_id']
     
     # Check if the user has already placed a bet in this lobby
     bet = Bet.query.filter_by(user_id=user_id, lobby_id=lobby_id, withdrawn=False).first()
-    
     if bet:
         # Mark the bet as "requested to withdraw" in Redis
-        redis_client.hset(f"withdrawals:{user_id}", lobby_id, True)
+        redis_client.hset(f"withdrawals:{user_id}", lobby_id, "1")
         emit('withdraw_requested', {'user_id': user_id, 'message': 'Withdraw requested'})
     else:
         emit('error', {'message': 'No active bet found to withdraw'}, room=request.sid)
 
-# Start the crash game logic after 60s from the first bet
 def start_game(lobby_id):
     with app.app_context():
-        time.sleep(10)  # 60s countdown before the game starts
+        time.sleep(10)  # 10s countdown before the game starts
         lobby = db.session.get(Lobby, lobby_id)
         if not lobby:
             return
@@ -135,6 +187,9 @@ def start_game(lobby_id):
         crash_point = crash_point_from_hash(lobby.current_hash)
         rising_coefficient = 1.00
 
+        # Store user balances to update later
+        user_balances = {}
+        
         # Emit rising coefficient until the crash point is reached
         while rising_coefficient <= crash_point:
             time.sleep(0.1)
@@ -148,9 +203,15 @@ def start_game(lobby_id):
                     for bet in bets:
                         bet.withdrawn = True
                         bet.withdrawal_coefficient = rising_coefficient
-                        payout = bet.amount * rising_coefficient
+                        payout = bet.amount * rising_coefficient - bet.amount
                         db.session.commit()
                         socketio.emit('bet_result', {'user_id': user_id, 'result': 'win', 'payout': payout}, room=user_id)
+                        
+                        # Update user's balance with the payout
+                        if user_id not in user_balances:
+                            user_balances[user_id] = 0
+                        user_balances[user_id] += payout
+
                     # Remove the user from withdrawals once processed
                     redis_client.hdel(f"withdrawals:{user_id}", lobby_id)
 
@@ -163,8 +224,26 @@ def start_game(lobby_id):
         for bet in lobby.bets:
             if not bet.withdrawn:
                 bet.withdrawn = True
+                if bet.coefficient > crash_point:
+                    # Calculate the loss for users who did not withdraw
+                    if bet.user_id not in user_balances:
+                        user_balances[bet.user_id] = 0  # No payout since they lost
+                    user_balances[bet.user_id] -= bet.amount  # Subtract the bet amount
+                else:
+                    if bet.user_id not in user_balances:
+                        user_balances[bet.user_id] = 0  # No payout since they lost
+                    user_balances[bet.user_id] += bet.amount * bet.coefficient - bet.amount
+
         db.session.commit()
         
+        # Update user balances
+        for user_id, balance_change in user_balances.items():
+            # Retrieve the token from Redis for the user
+            token = redis_client.get(f"user_token:{user_id}")
+            if token:
+                # Update user balance using the PUT method
+                requests.put(f"{AUTH_SERVICE_URL}/user/v1/balance", json={"ammount": balance_change}, headers={"Authorization": f"Bearer {token}"})
+
         lobby.in_progress = False
         # Update the lobby's hash for the next game
         lobby.current_hash = generate_hash(lobby.current_hash)
@@ -202,4 +281,4 @@ def create_initial_hash():
     return initial_hash
 
 if __name__ == '__main__':
-    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0', port=5000)
+    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0', port=5003)
