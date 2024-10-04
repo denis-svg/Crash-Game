@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, abort
-from flask_socketio import SocketIO, send, emit, join_room as sio_join_room
+from flask_socketio import SocketIO, emit
 from models import db, Lobby, Bet
 from config import Config
 import hashlib
@@ -8,22 +8,19 @@ import hmac
 import time
 import threading
 import os
+import redis
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
 db.init_app(app)
 
+# Connect to Redis
+redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
+
 socketio = SocketIO(app, cors_allowed_origins='*')
 
 salt = "0000000000000000000fa3b65e43e4240d71762a5bf397d5304b2596d116859c"
-
-# In-memory dictionary to track active WebSocket connections per lobby
-rooms = {}
-
-# Dictionary to track players who requested to withdraw from their bet
-withdrawals = {}
-
 
 @app.route('/game/v1/status', methods=['GET'])
 def status():
@@ -72,11 +69,10 @@ def handle_connect():
 def handle_join_room(data):
     lobby_id = data['lobby_id']
     print(data)
-    if lobby_id not in rooms:
-        rooms[lobby_id] = []
-    
-    rooms[lobby_id].append(request.sid)
-    print(rooms)
+
+    # Store the room in Redis
+    redis_client.sadd(f"room:{lobby_id}", request.sid)
+    print(redis_client.smembers(f"room:{lobby_id}"))
     emit(f'Joined room: {lobby_id}', room=request.sid)
 
 @socketio.on('place_bet')
@@ -109,7 +105,6 @@ def handle_place_bet(data):
 
     emit('bet_placed', {'user_id': user_id, 'amount': amount, 'coefficient': coefficient})
 
-
 # Withdraw bet during the game
 @socketio.on('withdraw')
 def handle_withdraw(data):
@@ -120,8 +115,8 @@ def handle_withdraw(data):
     bet = Bet.query.filter_by(user_id=user_id, lobby_id=lobby_id, withdrawn=False).first()
     
     if bet:
-        # Mark the bet as "requested to withdraw"
-        withdrawals[user_id] = lobby_id
+        # Mark the bet as "requested to withdraw" in Redis
+        redis_client.hset(f"withdrawals:{user_id}", lobby_id, True)
         emit('withdraw_requested', {'user_id': user_id, 'message': 'Withdraw requested'})
     else:
         emit('error', {'message': 'No active bet found to withdraw'}, room=request.sid)
@@ -143,8 +138,11 @@ def start_game(lobby_id):
         # Emit rising coefficient until the crash point is reached
         while rising_coefficient <= crash_point:
             time.sleep(0.1)
-            for user_id, bet_lobby_id in list(withdrawals.items()):
-                if bet_lobby_id == lobby_id:
+            
+            # Check for withdrawal requests in Redis
+            user_ids = redis_client.smembers(f"room:{lobby_id}")
+            for user_id in user_ids:
+                if redis_client.hexists(f"withdrawals:{user_id}", lobby_id):
                     # Withdraw all bets for this user
                     bets = Bet.query.filter_by(user_id=user_id, lobby_id=lobby_id, withdrawn=False).all()
                     for bet in bets:
@@ -154,9 +152,9 @@ def start_game(lobby_id):
                         db.session.commit()
                         socketio.emit('bet_result', {'user_id': user_id, 'result': 'win', 'payout': payout}, room=user_id)
                     # Remove the user from withdrawals once processed
-                    del withdrawals[user_id]
+                    redis_client.hdel(f"withdrawals:{user_id}", lobby_id)
 
-            for user in rooms[lobby_id]:
+            for user in user_ids:
                 socketio.emit('coefficient_update', {'coefficient': rising_coefficient}, room=user)
 
             rising_coefficient += 0.01
@@ -171,7 +169,6 @@ def start_game(lobby_id):
         # Update the lobby's hash for the next game
         lobby.current_hash = generate_hash(lobby.current_hash)
         db.session.commit()
-
 
 # Hashing Functions
 def salt_hash(hash_value):

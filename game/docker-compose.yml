@@ -14,6 +14,16 @@ services:
     networks:
       - app_network
 
+  # Redis Service
+  redis:
+    image: redis:latest  # Use the lightweight Alpine version of Redis
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"  # Map host port 6379 to container port 6379
+    networks:
+      - app_network
+
   # First Flask game service instance
   game_service_1:
     build:
@@ -22,6 +32,7 @@ services:
       - "5002:5000"  # Map host port 5002 to container port 5000
     depends_on:
       - mysql_game  # Ensure MySQL starts before the game service
+      - redis  # Ensure Redis starts before the game service
     networks:
       - app_network
 
@@ -33,6 +44,7 @@ services:
       - "5003:5000"  # Map host port 5003 to container port 5000
     depends_on:
       - mysql_game  # Ensure MySQL starts before the game service
+      - redis  # Ensure Redis starts before the game service
     networks:
       - app_network
 
