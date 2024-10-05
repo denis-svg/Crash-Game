@@ -86,19 +86,11 @@ def handle_connect():
 @socketio.on('joinRoom')
 def handle_join_room(data):
     lobby_id = data['lobby_id']
-    user_id = request.sid  # Use request.sid as user identifier
-
     print(data)
 
-    # Remove the user from all existing rooms
-    existing_rooms = redis_client.smembers(f"room:{user_id}")
-    for room in existing_rooms:
-        redis_client.srem(f"room:{room}", user_id)
-
-    # Store the new room in Redis
-    redis_client.sadd(f"room:{lobby_id}", user_id)
+    # Store the room in Redis
+    redis_client.sadd(f"room:{lobby_id}", request.sid)
     print(redis_client.smembers(f"room:{lobby_id}"))
-    
     emit(f'Joined room: {lobby_id}', room=request.sid)
 
 @socketio.on('place_bet')
@@ -154,6 +146,8 @@ def handle_place_bet(data):
     db.session.add(bet)
     db.session.commit()
 
+    redis_client.set(f"user_sid:{request.sid}", user_id)
+
     # Check if there are any non-withdrawn bets to start the game
     active_bets = Bet.query.filter_by(lobby_id=lobby_id, withdrawn=False).all()
     if len(active_bets) == 1:  # Start game logic when there is at least one non-withdrawn bet
@@ -177,7 +171,7 @@ def handle_withdraw(data):
     bet = Bet.query.filter_by(user_id=user_id, lobby_id=lobby_id, withdrawn=False).first()
     if bet:
         # Mark the bet as "requested to withdraw" in Redis
-        redis_client.hset(f"withdrawals:{user_id}", lobby_id, "1")
+        redis_client.set(f"withdrawals:{user_id}", lobby_id)
         emit('withdraw_requested', {'user_id': user_id, 'message': 'Withdraw requested'})
     else:
         emit('error', {'message': 'No active bet found to withdraw'}, room=request.sid)
@@ -203,9 +197,12 @@ def start_game(lobby_id):
             time.sleep(0.05)
             
             # Check for withdrawal requests in Redis
+            user_sids = redis_client.keys('user_sid:*')
             user_ids = redis_client.smembers(f"room:{lobby_id}")
-            for user_id in user_ids:
-                if redis_client.hexists(f"withdrawals:{user_id}", lobby_id):
+            for user_sid in user_sids:
+                user_id = redis_client.get(user_sid)
+                if redis_client.exists(f"withdrawals:{user_id}"):
+                    print(user_id, lobby_id)
                     # Withdraw all bets for this user
                     bets = Bet.query.filter_by(user_id=user_id, lobby_id=lobby_id, withdrawn=False).all()
                     for bet in bets:
@@ -221,7 +218,7 @@ def start_game(lobby_id):
                         user_balances[user_id] += payout
 
                     # Remove the user from withdrawals once processed
-                    redis_client.hdel(f"withdrawals:{user_id}", lobby_id)
+                    redis_client.delete(f"withdrawals:{user_id}", lobby_id)
 
             for user in user_ids:
                 socketio.emit('coefficient_update', {'coefficient': rising_coefficient}, room=user)
