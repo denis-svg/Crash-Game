@@ -27,7 +27,7 @@ public class GatewayController {
 
     @GetMapping("/user/v1/status")
     public ResponseEntity<String> user_status() {
-        String url = "http://0.0.0.0:5001/user/v1/status";
+        String url = "http://auth_service_1:5000/user/v1/status";
 
         // Make the HTTP request and get the response
         return getStringResponseEntity(url);

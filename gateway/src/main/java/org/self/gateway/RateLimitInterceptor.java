@@ -21,7 +21,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         String requestUri = request.getRequestURI();
 
         // Check if the request URI starts with "/user/"
-        if (requestUri.startsWith("/gateway/user/")) {
+        if (requestUri.startsWith("/gateway/")) {
             RequestCounter counter = requestCounts.computeIfAbsent(clientIp, k -> new RequestCounter());
 
             if (counter.isWithinLimit(RATE_LIMIT, TIME_WINDOW)) {

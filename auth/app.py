@@ -57,7 +57,7 @@ def login():
 @jwt_required()
 def get_balance():
     user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    user = User.query.filter_by(id=user_id).first()
     if user:
         return jsonify({"balance": user.balance}), 200
     return jsonify({"error": "User not found"}), 404
@@ -93,7 +93,7 @@ def update_balance():
         return jsonify({"error": "Ammount is required"}), 400
 
     user_id = get_jwt_identity()
-    user = User.query.get(user_id)
+    user = User.query.filter_by(id=user_id).first()
     
     if user:
         user.balance += ammount
@@ -106,7 +106,7 @@ def update_balance():
 @jwt_required()
 def validate():
     user_id = get_jwt_identity()  # Get the user's identity from the token
-    user = User.query.get(user_id)  # Retrieve the user from the database
+    user = User.query.filter_by(id=user_id).first()
     
     if user:
         return jsonify({"status": "valid", "user_id": user.id, "username": user.username}), 200

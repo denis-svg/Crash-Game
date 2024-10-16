@@ -1,0 +1,77 @@
+version: '3.8'
+services:
+  # Auth Service
+  auth_service_1:
+    build:
+      context: ./auth
+    ports:
+      - "5000:5000"
+    depends_on:
+      - auth_db
+    networks:
+      - app_network
+
+  # Game Service
+  game_service_1:
+    build:
+      context: ./game
+    ports:
+      - "5001:5000"
+    depends_on:
+      - game_db
+    networks:
+      - app_network
+
+  # Game Service
+  gateway:
+    build:
+      context: ./gateway
+    ports:
+      - "5002:8080"
+    networks:
+      - app_network
+      
+# Redis Service
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+
+  # MySQL Database for Auth Service
+  auth_db:
+    image: mysql:8.0
+    container_name: mysql_auth
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: '1111'
+      MYSQL_DATABASE: auth_db
+    volumes:
+      - auth_db_data:/var/lib/mysql
+    networks:
+      - app_network
+
+  # MySQL Database for Game Service
+  game_db:
+    image: mysql:8.0
+    container_name: mysql_game
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: '1111'
+      MYSQL_DATABASE: game_db
+    volumes:
+      - game_db_data:/var/lib/mysql
+    networks:
+      - app_network
+
+# Volumes for MySQL Data Persistence
+volumes:
+  auth_db_data:
+  game_db_data:
+
+# Network for inter-service communication
+networks:
+  app_network:

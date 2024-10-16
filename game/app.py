@@ -17,13 +17,13 @@ app.config.from_object(Config)
 db.init_app(app)
 
 # Connect to Redis
-redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
+redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
 
 socketio = SocketIO(app, cors_allowed_origins='*')
 
 salt = "0000000000000000000fa3b65e43e4240d71762a5bf397d5304b2596d116859c"
 
-AUTH_SERVICE_URL = "http://127.0.0.1:5001"
+AUTH_SERVICE_URL = "http://auth_service_1:5000"
 
 def validate_token(token):
     """ Validate JWT token with the auth service and retrieve user information. """
@@ -286,14 +286,4 @@ def create_initial_hash():
     return initial_hash
 
 if __name__ == '__main__':
-    import argparse
-    # Set up the argument parser
-    parser = argparse.ArgumentParser(description='Run the Flask app.')
-    parser.add_argument('--port', type=int, default=5003, help='Port number to run the Flask app on')
-
-    # Parse the arguments
-    args = parser.parse_args()
-
-    # Access the port number
-    port = args.port
-    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0', port=port)
+    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0')
