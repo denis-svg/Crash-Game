@@ -4,6 +4,7 @@ import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
@@ -20,7 +21,7 @@ public class GatewayController {
 
     private RestTemplate createRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(500); // Set connect timeout (in milliseconds)
+        factory.setConnectTimeout(2000); // Set connect timeout (in milliseconds)
         factory.setReadTimeout(5000); // Set read timeout (in milliseconds)
         return new RestTemplate(factory);
     }
@@ -35,7 +36,8 @@ public class GatewayController {
 
     @GetMapping("/game/v1/status")
     public ResponseEntity<String> game_status() {
-        String url = "http://0.0.0.0:5003/game/v1/status";
+        String url = "http://game_service_1:5000/game/v1/status";
+
 
         // Make the HTTP request and get the response
         return getStringResponseEntity(url);
@@ -43,7 +45,7 @@ public class GatewayController {
 
     @PostMapping("/game/v1/lobby")
     public ResponseEntity<String> game_lobby(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = "http://0.0.0.0:5003/game/v1/lobby";
+        String url = "http://game_service_1:5000/game/v1/lobby";
 
         // Make the HTTP request and get the response
         return postWithAuth(url, token, request);
@@ -51,38 +53,38 @@ public class GatewayController {
 
     @PostMapping("/user/v1/auth/register")
     public ResponseEntity<String> register(@RequestBody Map<String, String> request) {
-        String url = "http://0.0.0.0:5000/user/v1/auth/register";
+        String url = "http://auth_service_1:5000/user/v1/auth/register";
         return postRequest(url, request);
     }
 
 
     @PostMapping("/user/v1/auth/login")
     public ResponseEntity<String> login(@RequestBody Map<String, String> request) {
-        String url = "http://0.0.0.0:5000/user/v1/auth/login";
+        String url = "http://auth_service_1:5000/user/v1/auth/login";
         return postRequest(url, request);
     }
 
     @GetMapping("/user/v1/balance")
     public ResponseEntity<String> getBalance(@RequestHeader("Authorization") String token) {
-        String url = "http://0.0.0.0:5000/user/v1/balance";
+        String url = "http://auth_service_1:5000/user/v1/balance";
         return getWithAuth(url, token);
     }
 
     @GetMapping("/user/v1/auth/validate")
     public ResponseEntity<String> validate(@RequestHeader("Authorization") String token) {
-        String url = "http://0.0.0.0:5000/user/v1/auth/validate";
+        String url = "http://auth_service_1:5000/user/v1/auth/validate";
         return getWithAuth(url, token);
     }
 
     @PostMapping("/user/v1/balance")
     public ResponseEntity<String> setBalance(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = "http://0.0.0.0:5000/user/v1/balance";
+        String url = "http://auth_service_1:5000/user/v1/balance";
         return postWithAuth(url, token, request);
     }
 
     @PutMapping("/user/v1/balance")
     public ResponseEntity<String> updateBalance(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = "http://0.0.0.0:5000/user/v1/balance";
+        String url = "http://auth_service_1:5000/user/v1/balance";
         return putWithAuth(url, token, request);
     }
 
@@ -97,6 +99,9 @@ public class GatewayController {
             return ResponseEntity.ok(responseEntity.getBody());
         } catch (HttpClientErrorException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }catch (RestClientException e) {
+            // General exception for other RestTemplate failures, including timeouts
+            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while processing the request");
         }
@@ -113,6 +118,9 @@ public class GatewayController {
             return ResponseEntity.ok(responseEntity.getBody());
         } catch (HttpClientErrorException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }catch (RestClientException e) {
+            // General exception for other RestTemplate failures, including timeouts
+            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while processing the request");
         }
@@ -128,6 +136,9 @@ public class GatewayController {
             return ResponseEntity.ok(responseEntity.getBody());
         } catch (HttpClientErrorException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }catch (RestClientException e) {
+            // General exception for other RestTemplate failures, including timeouts
+            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while fetching balance");
         }
@@ -139,6 +150,9 @@ public class GatewayController {
             return ResponseEntity.ok(responseEntity.getBody());
         }catch (HttpClientErrorException e){
             return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }catch (RestClientException e) {
+            // General exception for other RestTemplate failures, including timeouts
+            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
         }
     }
 
@@ -152,8 +166,11 @@ public class GatewayController {
                 return ResponseEntity.ok(responseEntity.getBody());
             }
         }
-        catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Service not found");
+        catch (HttpClientErrorException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+        }catch (RestClientException e) {
+            // General exception for other RestTemplate failures, including timeouts
+            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
         }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred");
     }
