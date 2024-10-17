@@ -7,11 +7,17 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/gateway")
 public class GatewayController {
+
+    // In-memory service registry, mapping service types to their lists of URLs
+    private final Map<String, ArrayList<String>> services = new HashMap<>();
 
     private final RestTemplate restTemplate;
 
@@ -24,6 +30,41 @@ public class GatewayController {
         factory.setConnectTimeout(2000); // Set connect timeout (in milliseconds)
         factory.setReadTimeout(5000); // Set read timeout (in milliseconds)
         return new RestTemplate(factory);
+    }
+
+    @PostMapping("/cache")
+    public ResponseEntity<String> updateCache(@RequestBody Map<String, String> request) {
+        // Extract service type and URL from the request
+        String serviceUrl = request.get("serviceUrl");
+        String serviceType = request.get("serviceType");
+
+        // Ensure the list for the service type exists
+        services.putIfAbsent(serviceType, new ArrayList<>());
+
+        // Add the service URL to the appropriate list
+        services.get(serviceType).add(serviceUrl);
+
+        return ResponseEntity.ok("Service cache updated: " + serviceUrl);
+    }
+
+    @DeleteMapping("/cache")
+    public ResponseEntity<String> deregisterService(@RequestBody Map<String, String> request) {
+        String serviceUrl = request.get("serviceUrl");
+        String serviceType = request.get("serviceType");
+        List<String> urls = services.get(serviceType);
+
+        if (urls != null) {
+            boolean removed = urls.remove(serviceUrl); // Remove the service URL
+            if (removed) {
+                return ResponseEntity.ok("Service deregistered: " + serviceUrl);
+            }
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Service not found: " + serviceUrl);
+    }
+
+    @GetMapping("/cache")
+    public Map<String, ArrayList<String>> getServices() {
+        return services;
     }
 
     @GetMapping("/user/v1/status")
