@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
 
-    private final long RATE_LIMIT = 5; // Number of requests allowed
+    private final long RATE_LIMIT = 7; // Number of requests allowed
     private final long TIME_WINDOW = TimeUnit.SECONDS.toMillis(10); // Time window in milliseconds
     private final ConcurrentHashMap<String, RequestCounter> requestCounts = new ConcurrentHashMap<>();
 

@@ -19,6 +19,9 @@ public class GatewayController {
     // In-memory service registry, mapping service types to their lists of URLs
     private final Map<String, ArrayList<String>> services = new HashMap<>();
 
+    // Round-robin counters for each service type
+    private final Map<String, Integer> roundRobinCounters = new HashMap<>();
+
     private final RestTemplate restTemplate;
 
     public GatewayController() {
@@ -44,7 +47,29 @@ public class GatewayController {
         // Add the service URL to the appropriate list
         services.get(serviceType).add(serviceUrl);
 
+        // Initialize round-robin counter for the service type if not present
+        roundRobinCounters.putIfAbsent(serviceType, 0);
+
         return ResponseEntity.ok("Service cache updated: " + serviceUrl);
+    }
+
+    private String getNextServiceUrl(String serviceType) {
+        List<String> serviceUrls = services.get(serviceType);
+
+        if (serviceUrls == null || serviceUrls.isEmpty()) {
+            throw new IllegalStateException("No services registered for: " + serviceType);
+        }
+
+        // Get the current counter value for the service type
+        int currentIndex = roundRobinCounters.get(serviceType);
+
+        // Get the next URL using the counter and wrap around if needed
+        String nextUrl = serviceUrls.get(currentIndex);
+
+        // Update the counter, wrapping around if necessary
+        roundRobinCounters.put(serviceType, (currentIndex + 1) % serviceUrls.size());
+
+        return nextUrl;
     }
 
     @DeleteMapping("/cache")
@@ -69,24 +94,23 @@ public class GatewayController {
 
     @GetMapping("/user/v1/status")
     public ResponseEntity<String> user_status() {
-        String url = "http://auth_service_1:5000/user/v1/status";
-
+        String url = getNextServiceUrl("auth_service");
         // Make the HTTP request and get the response
-        return getStringResponseEntity(url);
+        return getStringResponseEntity(url + "/user/v1/status");
     }
 
     @GetMapping("/game/v1/status")
     public ResponseEntity<String> game_status() {
-        String url = "http://game_service_1:5000/game/v1/status";
+        String url = getNextServiceUrl("game_service");
 
 
         // Make the HTTP request and get the response
-        return getStringResponseEntity(url);
+        return getStringResponseEntity(url + "/game/v1/status");
     }
 
     @PostMapping("/game/v1/lobby")
     public ResponseEntity<String> game_lobby(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = "http://game_service_1:5000/game/v1/lobby";
+        String url = getNextServiceUrl("game_service") + "/game/v1/lobby";
 
         // Make the HTTP request and get the response
         return postWithAuth(url, token, request);
@@ -94,38 +118,38 @@ public class GatewayController {
 
     @PostMapping("/user/v1/auth/register")
     public ResponseEntity<String> register(@RequestBody Map<String, String> request) {
-        String url = "http://auth_service_1:5000/user/v1/auth/register";
+        String url = getNextServiceUrl("auth_service") + "/user/v1/auth/register";
         return postRequest(url, request);
     }
 
 
     @PostMapping("/user/v1/auth/login")
     public ResponseEntity<String> login(@RequestBody Map<String, String> request) {
-        String url = "http://auth_service_1:5000/user/v1/auth/login";
+        String url = getNextServiceUrl("auth_service") + "/user/v1/auth/login";
         return postRequest(url, request);
     }
 
     @GetMapping("/user/v1/balance")
     public ResponseEntity<String> getBalance(@RequestHeader("Authorization") String token) {
-        String url = "http://auth_service_1:5000/user/v1/balance";
+        String url = getNextServiceUrl("auth_service") + "/user/v1/balance";
         return getWithAuth(url, token);
     }
 
     @GetMapping("/user/v1/auth/validate")
     public ResponseEntity<String> validate(@RequestHeader("Authorization") String token) {
-        String url = "http://auth_service_1:5000/user/v1/auth/validate";
+        String url = getNextServiceUrl("auth_service") + "/user/v1/auth/validate";
         return getWithAuth(url, token);
     }
 
     @PostMapping("/user/v1/balance")
     public ResponseEntity<String> setBalance(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = "http://auth_service_1:5000/user/v1/balance";
+        String url = getNextServiceUrl("auth_service") + "/user/v1/balance";
         return postWithAuth(url, token, request);
     }
 
     @PutMapping("/user/v1/balance")
     public ResponseEntity<String> updateBalance(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = "http://auth_service_1:5000/user/v1/balance";
+        String url = getNextServiceUrl("auth_service") + "/user/v1/balance";
         return putWithAuth(url, token, request);
     }
 

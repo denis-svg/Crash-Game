@@ -34,6 +34,18 @@ services:
       - app_network
     command: sh -c "python3 db_init.py && python3 app.py -st=game_service -si=1"
 
+  game_service_2:
+    build:
+      context: ./game
+    ports:
+      - "5030:5000"
+    depends_on:
+      - game_db
+      - gateway
+    networks:
+      - app_network
+    command: sh -c "python3 db_init.py && python3 app.py -st=game_service -si=2"
+
   # Game Service
   gateway:
     build:
