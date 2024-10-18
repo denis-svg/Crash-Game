@@ -3,6 +3,9 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from flask_sqlalchemy import SQLAlchemy
 from models import db, User
 from config import Config
+import argparse
+import time
+import requests
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -11,6 +14,27 @@ db.init_app(app)
 
 # JWT Setup
 jwt = JWTManager(app)
+
+# Register service with Service Discovery
+def register_service(service_type, service_id, retries=5, delay=5):
+    discovery_url = "http://gateway:8080/discovery/register"
+
+    registration_payload = {
+        "serviceType": service_type,
+        "serviceUrl": f"http://{service_type}_{service_id}:5000"
+    }
+
+    for attempt in range(retries):
+        try:
+            response = requests.post(discovery_url, json=registration_payload)
+            print("request went nice")
+            return
+        except requests.exceptions.RequestException as e:
+            print(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+
+        time.sleep(delay)
+
+    print("Service registration failed after maximum retries.")
 
 @app.route('/user/v1/status', methods=['GET'])
 def status():
@@ -113,4 +137,12 @@ def validate():
     return jsonify({"error": "User not found"}), 404
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Flask Application')
+    parser.add_argument('-st', '--serviceType', required=True, help='Type of the service')
+    parser.add_argument('-si', '--serviceIdentifier', required=True, help='Identifier for the service')
+    
+    args = parser.parse_args()
+    service_type = args.serviceType
+    service_id = args.serviceIdentifier
+    register_service(service_type, service_id)
     app.run(host='0.0.0.0', port=5000)

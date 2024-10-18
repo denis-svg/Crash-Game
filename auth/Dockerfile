@@ -18,9 +18,3 @@ RUN pip install --no-cache-dir --requirement /app/requirements.txt
 
 # Copy the rest of the application code
 COPY . /app
-
-# Expose the application port (for one replica)
-EXPOSE 5000
-
-# Command to run the Flask app
-CMD ["sh", "-c", "python3 db_init.py && python3 app.py"]

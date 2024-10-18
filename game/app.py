@@ -10,6 +10,7 @@ import threading
 import os
 import redis
 import requests
+import argparse
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -24,6 +25,27 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 salt = "0000000000000000000fa3b65e43e4240d71762a5bf397d5304b2596d116859c"
 
 AUTH_SERVICE_URL = "http://auth_service_1:5000"
+
+# Register service with Service Discovery
+def register_service(service_type, service_id, retries=5, delay=5):
+    discovery_url = "http://gateway:8080/discovery/register"
+
+    registration_payload = {
+        "serviceType": service_type,
+        "serviceUrl": f"http://{service_type}_{service_id}:5000"
+    }
+
+    for attempt in range(retries):
+        try:
+            response = requests.post(discovery_url, json=registration_payload)
+            print("request went nice")
+            return
+        except requests.exceptions.RequestException as e:
+            print(f"Attempt {attempt + 1} failed: {e}. Retrying...")
+
+        time.sleep(delay)
+
+    print("Service registration failed after maximum retries.")
 
 def validate_token(token):
     """ Validate JWT token with the auth service and retrieve user information. """
@@ -286,4 +308,12 @@ def create_initial_hash():
     return initial_hash
 
 if __name__ == '__main__':
-    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0')
+    parser = argparse.ArgumentParser(description='Flask Application')
+    parser.add_argument('-st', '--serviceType', required=True, help='Type of the service')
+    parser.add_argument('-si', '--serviceIdentifier', required=True, help='Identifier for the service')
+    
+    args = parser.parse_args()
+    service_type = args.serviceType
+    service_id = args.serviceIdentifier
+    register_service(service_type, service_id)
+    socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0', port=5000)
