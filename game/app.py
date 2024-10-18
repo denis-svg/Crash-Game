@@ -17,6 +17,8 @@ app.config.from_object(Config)
 
 db.init_app(app)
 
+port = None
+
 # Connect to Redis
 redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
 
@@ -98,7 +100,7 @@ def get_lobby(lobby_id):
     if not lobby:
         abort(404)
     
-    return jsonify({'websocket_url': f"ws://localhost:5000"})
+    return jsonify({'websocket_url': f"http://localhost:{port}"})
 
 # Handle WebSocket connections for joining a lobby
 @socketio.on('connect')
@@ -311,9 +313,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Flask Application')
     parser.add_argument('-st', '--serviceType', required=True, help='Type of the service')
     parser.add_argument('-si', '--serviceIdentifier', required=True, help='Identifier for the service')
-    
+    parser.add_argument('-p', '--port', required=True, help='external port for the service')
     args = parser.parse_args()
     service_type = args.serviceType
     service_id = args.serviceIdentifier
     register_service(service_type, service_id)
+    port = args.port
     socketio.run(app, allow_unsafe_werkzeug=True, host='0.0.0.0', port=5000)

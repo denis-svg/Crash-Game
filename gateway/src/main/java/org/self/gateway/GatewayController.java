@@ -116,6 +116,15 @@ public class GatewayController {
         return postWithAuth(url, token, request);
     }
 
+    @GetMapping("/game/v1/lobby/{id}")
+    public ResponseEntity<String> get_ws(@PathVariable String id) {
+        String url = getNextServiceUrl("game_service") + "/game/v1/lobby/" + id;
+
+        // Make the HTTP request and get the response
+        return getStringResponseEntity(url);
+    }
+
+
     @PostMapping("/user/v1/auth/register")
     public ResponseEntity<String> register(@RequestBody Map<String, String> request) {
         String url = getNextServiceUrl("auth_service") + "/user/v1/auth/register";

@@ -32,7 +32,7 @@ services:
       - gateway
     networks:
       - app_network
-    command: sh -c "python3 db_init.py && python3 app.py -st=game_service -si=1"
+    command: sh -c "python3 db_init.py && python3 app.py -st=game_service -si=1 -p=5001"
 
   game_service_2:
     build:
@@ -44,7 +44,7 @@ services:
       - gateway
     networks:
       - app_network
-    command: sh -c "python3 db_init.py && python3 app.py -st=game_service -si=2"
+    command: sh -c "python3 db_init.py && python3 app.py -st=game_service -si=2 -p=5030"
 
   # Game Service
   gateway:
