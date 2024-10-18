@@ -211,18 +211,10 @@ public class GatewayController {
         headers.add("Authorization", token); // Set the Authorization header with Bearer prefix
         headers.setContentType(MediaType.APPLICATION_JSON); // Set the content type to JSON
 
-        try {
-            // Create an HttpEntity with the headers and body
-            ResponseEntity<String> responseEntity = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), String.class);
-            return ResponseEntity.ok(responseEntity.getBody());
-        } catch (HttpClientErrorException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        }catch (RestClientException e) {
-            // General exception for other RestTemplate failures, including timeouts
-            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while processing the request");
-        }
+        return RetryUtils.retryRequest(() -> {
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            return restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        }, url, 3);
     }
 
     private ResponseEntity<String> putWithAuth(String url, String token, Map<String, Object> request) {
@@ -230,66 +222,27 @@ public class GatewayController {
         headers.add("Authorization", token); // Set the Authorization header with Bearer prefix
         headers.setContentType(MediaType.APPLICATION_JSON); // Set the content type to JSON
 
-        try {
-            // Create an HttpEntity with the headers and body
-            ResponseEntity<String> responseEntity = restTemplate.exchange(url, HttpMethod.PUT, new HttpEntity<>(request, headers), String.class);
-            return ResponseEntity.ok(responseEntity.getBody());
-        } catch (HttpClientErrorException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        }catch (RestClientException e) {
-            // General exception for other RestTemplate failures, including timeouts
-            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while processing the request");
-        }
+        return RetryUtils.retryRequest(() -> {
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            return restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
+        }, url, 3);
     }
 
     private ResponseEntity<String> getWithAuth(String url, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", token); // Set the Authorization header with Bearer prefix
 
-        try {
-            // Create an HttpEntity with the headers
-            ResponseEntity<String> responseEntity = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
-            return ResponseEntity.ok(responseEntity.getBody());
-        } catch (HttpClientErrorException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        }catch (RestClientException e) {
-            // General exception for other RestTemplate failures, including timeouts
-            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while fetching balance");
-        }
+        return RetryUtils.retryRequest(() -> {
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            return restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+        }, url, 3);
     }
 
     private ResponseEntity<String> postRequest(String url, Map<String, String> request) {
-        try{
-            ResponseEntity<String> responseEntity = restTemplate.postForEntity(url, request, String.class);
-            return ResponseEntity.ok(responseEntity.getBody());
-        }catch (HttpClientErrorException e){
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        }catch (RestClientException e) {
-            // General exception for other RestTemplate failures, including timeouts
-            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
-        }
+        return RetryUtils.retryRequest(() -> restTemplate.postForEntity(url, request, String.class), url, 3);
     }
 
     private ResponseEntity<String> getStringResponseEntity(String url) {
-        try {
-            ResponseEntity<String> responseEntity = restTemplate.getForEntity(url, String.class);
-
-            // Check the status code and return accordingly
-            if (responseEntity.getStatusCode() == HttpStatus.OK) {
-                // Return 200 OK and the response body from the user service
-                return ResponseEntity.ok(responseEntity.getBody());
-            }
-        }
-        catch (HttpClientErrorException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        }catch (RestClientException e) {
-            // General exception for other RestTemplate failures, including timeouts
-            return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
-        }
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred");
+        return RetryUtils.retryRequest(() -> restTemplate.getForEntity(url, String.class), url, 3);
     }
 }
