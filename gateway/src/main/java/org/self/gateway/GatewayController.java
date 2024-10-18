@@ -92,6 +92,50 @@ public class GatewayController {
         return services;
     }
 
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> status() {
+        Map<String, Object> statusResponse = new HashMap<>();
+        List<String> workingServices = new ArrayList<>();
+
+        // Iterate over all service types in the registry
+        for (Map.Entry<String, ArrayList<String>> serviceEntry : services.entrySet()) {
+            String serviceType = serviceEntry.getKey();
+            ArrayList<String> serviceUrls = serviceEntry.getValue();
+
+            // Check each service URL for the current service type
+            for (String serviceUrl : serviceUrls) {
+                try {
+                    // Ping the service status endpoint
+                    String statusUrl;
+                    if (serviceType.equals("game_service")) {
+                        statusUrl = serviceUrl + "/game/v1/status";
+                    } else {
+                        statusUrl = serviceUrl + "/user/v1/status";
+                    }
+                    ResponseEntity<String> response = restTemplate.getForEntity(statusUrl, String.class);
+
+                    // If the service responds with HTTP 200 OK, mark it as working
+                    if (response.getStatusCode() == HttpStatus.OK) {
+                        workingServices.add(serviceType + ": " + serviceUrl);
+                    }
+                } catch (RestClientException e) {
+                    // If any service fails, return an error for that service
+                    statusResponse.put("message", "Some services are down");
+                    statusResponse.put("workingServices", workingServices);
+                    statusResponse.put("failedService", serviceType + ": " + serviceUrl);
+
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(statusResponse);
+                }
+            }
+        }
+
+        // If all services are working, return the list of working services and a success message
+        statusResponse.put("message", "All services are up and running");
+        statusResponse.put("workingServices", workingServices);
+
+        return ResponseEntity.ok(statusResponse);
+    }
+
     @GetMapping("/user/v1/status")
     public ResponseEntity<String> user_status() {
         String url = getNextServiceUrl("auth_service");
