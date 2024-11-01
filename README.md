@@ -74,26 +74,26 @@ GET /gateway/game/v1/lobby/<int:lobby_id>
 
 # Web sockets
 connect
-```json
+```
 {'message': 'WebSocket connection established'}
 ```
 
 joinRoom
-```json
+```
 {'lobby_id': '4'}
 ```
 
-```json
+```
 'Joined room: {4}'
 ```
 
 place_bet
-```json
+```
 {token:"jwt_token"]
 ```
 
 withdraw
-```json
+```
 {token:"jwt_token"]
 ```
 
