@@ -1,4 +1,10 @@
 # Crash-Game
+## Usage
+
+Run:
+```CMD
+docker compose up --build
+```
 
 ## Application Suitability
 
@@ -12,141 +18,85 @@ Reloaded was initially designed as a monolithic system for converting high-quali
 
 In 2018, Netflix developed Cosmos, a media-centric microservices platform designed to improve flexibility and feature development velocity over the monolithic Reloaded system. Cosmos employs microservices, each focused on a specific function in the media pipeline, such as Video Encoding Service (VES) and Video Quality Service (VQS), to decouple complex processes like encoding and quality assessment. Each service operates independently, and service orchestration is customized for two main use cases: member streaming, which focuses on high-quality, scalable video assets, and studio operations, which prioritize fast turnaround for production needs. This architecture enhances scalability, experimentation, and innovation.
 
-## Service Boundaries
-![444444444444](https://github.com/user-attachments/assets/69c58771-9e20-46ae-b5a2-3ccae60f76a1)
+## Service boundaries
+![32131 drawio](https://github.com/user-attachments/assets/ae85c94c-6562-4ad0-8331-7203b46855c3)
 
 ## Data Management
 
+The interface of the api and websockets can be tested in open-api interface. Below there is a list of endpoints from both services
+
 - Service A
 
-POST /user/auth/register
+POST /gateway/user/v1/auth/register
 ```json
 {
-  "userId": "user123",
-  "username": "johnDoe",
-  "email": "johndoe@example.com",
-  "status": "registered"
+  "username": "user123",
+  "password": "johnDoe",
 }
 ```
 
-POST /user/auth/login
+POST /gateway/user/v1/auth/login
 ```json
 {
-  "userId": "user123",
-  "token": "eyJhbGciOiJIUzI1NiIsInR...",
-  "status": "authenticated"
+  "username": "user123",
+  "password": "johnDoe",
 }
 ```
 
-POST /user/auth/validate
+POST /gateway/user/v1/auth/validate
+expects: jwt token
 
-GET /user/{userId}/balance
+GET /gateway/user/v1/balance
+expects: jwt token
+
+PUT /gateway/user/v1/balance
 ```json
 {
-  "userId": "user123",
-  "balance": 1000
+  "ammount": 1000
 }
 ```
+expects: jwt token
 
-POST /user/{userId}/balance
+POST /gateway/user/v1/balance
+expects: jwt token
 ```json
 {
-  "userId": "user123",
-  "newBalance": 900
-}
-```
-
-GET /user/{userId}/profile
-```json
-{
-  "userId": "user123",
-  "username": "johnDoe",
-  "email": "johndoe@example.com"
+  "ammount": 1000
 }
 ```
 
 - Service B
 
-POST /game/lobby/create
-```json
-{
-  "lobbyId": "lobby123",
-  "lobbyName": "HighStakes",
-  "maxPlayers": 10,
-  "status": "created"
-}
+POST /gateway/game/v1/lobby
+expects: jwt token
+
+GET /gateway/game/v1/lobby/<int:lobby_id>
+
+# Web sockets
+connect
+```
+{'message': 'WebSocket connection established'}
 ```
 
-GET /game/lobbies
-```json
-[
-  {
-    "lobbyId": "lobby123",
-    "lobbyName": "HighStakes",
-    "currentPlayers": 5,
-    "maxPlayers": 10
-  },
-  {
-    "lobbyId": "lobby456",
-    "lobbyName": "LowStakes",
-    "currentPlayers": 2,
-    "maxPlayers": 5
-  }
-]
+joinRoom
 ```
-### Websockets
-/web_socket/<lobby_id>/
-Join a Lobby
-
-```json
-{
-  "action": "join",
-  "userId": "user123",
-  "lobbyId": "lobby123",
-  "status": "joined"
-}
+{'lobby_id': '4'}
 ```
 
-Place a Bet
-
-```json
-{
-  "action": "bet",
-  "userId": "user123",
-  "lobbyId": "lobby123",
-  "gameId": "game789",
-  "betAmount": 100,
-  "status": "bet placed"
-}
+```
+'Joined room: {4}'
 ```
 
-Receive Game Status Updates
-
-```json
-{
-  "action": "statusUpdate",
-  "lobbyId": "lobby123",
-  "gameId": "game789",
-  "currentMultiplier": 2.5,
-  "status": "in-progress"
-}
+place_bet
+```
+{token:"jwt_token"]
 ```
 
-Cash Out
-
-```json
-{
-  "action": "cashout",
-  "userId": "user123",
-  "gameId": "game789",
-  "multiplier": 3.2,
-  "payout": 320,
-  "status": "cashed out"
-}
+withdraw
 ```
-
+{token:"jwt_token"]
+```
 
 ## Deployment & Scaling
- * Docker to containerize each microservice in order to ensure that each service can run independently in a Docker container.
- * Kubernetes for managing the deployment, scaling, and load balancing. This will allow you to automatically scale the microservices based on demand.
+All services, including Gateway, Service discovery, databases and Prometheus + Grafana run inside Docker containers and are managed with Docker Compose.
 
