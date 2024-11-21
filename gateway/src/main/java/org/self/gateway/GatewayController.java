@@ -138,110 +138,258 @@ public class GatewayController {
 
     @GetMapping("/user/v1/status")
     public ResponseEntity<String> user_status() {
+        List<String> urls = new ArrayList<>(services.get("auth_service"));
         String url = getNextServiceUrl("auth_service");
+        urls.remove(url);
+
+        url = url + "/user/v1/status";
+        urls.replaceAll(s -> s + "/user/v1/status");
+
         // Make the HTTP request and get the response
-        return getStringResponseEntity(url + "/user/v1/status");
+        return getStringResponseEntity(url, urls);
     }
 
     @GetMapping("/game/v1/status")
     public ResponseEntity<String> game_status() {
+        List<String> urls = new ArrayList<>(services.get("game_service"));
         String url = getNextServiceUrl("game_service");
+        urls.remove(url);
+
+        url = url + "/game/v1/status";
+        urls.replaceAll(s -> s + "/game/v1/status");
 
 
         // Make the HTTP request and get the response
-        return getStringResponseEntity(url + "/game/v1/status");
+        return getStringResponseEntity(url, urls);
     }
 
     @PostMapping("/game/v1/lobby")
     public ResponseEntity<String> game_lobby(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = getNextServiceUrl("game_service") + "/game/v1/lobby";
+        List<String> urls = new ArrayList<>(services.get("game_service"));
+        String url = getNextServiceUrl("game_service");
+        urls.remove(url);
+
+        url = url + "/game/v1/lobby";
+        urls.replaceAll(s -> s + "/game/v1/lobby");
+
         // Make the HTTP request and get the response
-        return postWithAuth(url, token, request);
+        return postWithAuth(url, urls, token, request);
     }
 
     @GetMapping("/game/v1/lobby/{id}")
     public ResponseEntity<String> get_ws(@PathVariable String id) {
-        String url = getNextServiceUrl("game_service") + "/game/v1/lobby/" + id;
+        List<String> urls = new ArrayList<>(services.get("game_service"));
+        String url = getNextServiceUrl("game_service");
+        urls.remove(url);
+
+        url = url + "/game/v1/lobby/" + id;
+        urls.replaceAll(s -> s + "/game/v1/lobby/" + id);
 
         // Make the HTTP request and get the response
-        return getStringResponseEntity(url);
+        return getStringResponseEntity(url, urls);
     }
 
 
     @PostMapping("/user/v1/auth/register")
     public ResponseEntity<String> register(@RequestBody Map<String, String> request) {
-        String url = getNextServiceUrl("auth_service") + "/user/v1/auth/register";
-        return postRequest(url, request);
+        List<String> urls = new ArrayList<>(services.get("auth_service"));
+        String url = getNextServiceUrl("auth_service");
+        urls.remove(url);
+
+        url = url + "/user/v1/auth/register";
+        urls.replaceAll(s -> s + "/user/v1/auth/register");
+
+        return postRequest(url, urls, request);
     }
 
 
     @PostMapping("/user/v1/auth/login")
     public ResponseEntity<String> login(@RequestBody Map<String, String> request) {
-        String url = getNextServiceUrl("auth_service") + "/user/v1/auth/login";
-        return postRequest(url, request);
+        List<String> urls = new ArrayList<>(services.get("auth_service"));
+        String url = getNextServiceUrl("auth_service");
+        urls.remove(url);
+
+        url = url + "/user/v1/auth/login";
+        urls.replaceAll(s -> s + "/user/v1/auth/login");
+
+        return postRequest(url, urls, request);
     }
 
     @GetMapping("/user/v1/balance")
     public ResponseEntity<String> getBalance(@RequestHeader("Authorization") String token) {
-        String url = getNextServiceUrl("auth_service") + "/user/v1/balance";
-        return getWithAuth(url, token);
+        List<String> urls = new ArrayList<>(services.get("auth_service"));
+        String url = getNextServiceUrl("auth_service");
+        urls.remove(url);
+
+        url = url + "/user/v1/balance";
+        urls.replaceAll(s -> s + "/user/v1/balance");
+
+        return getWithAuth(url, urls, token);
     }
 
     @GetMapping("/user/v1/auth/validate")
     public ResponseEntity<String> validate(@RequestHeader("Authorization") String token) {
-        String url = getNextServiceUrl("auth_service") + "/user/v1/auth/validate";
-        return getWithAuth(url, token);
+        List<String> urls = new ArrayList<>(services.get("auth_service"));
+        String url = getNextServiceUrl("auth_service");
+        urls.remove(url);
+
+        url = url + "/user/v1/auth/validate";
+        urls.replaceAll(s -> s + "/user/v1/auth/validate");
+
+        return getWithAuth(url, urls, token);
     }
 
     @PostMapping("/user/v1/balance")
     public ResponseEntity<String> setBalance(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = getNextServiceUrl("auth_service") + "/user/v1/balance";
-        return postWithAuth(url, token, request);
+        List<String> urls = new ArrayList<>(services.get("auth_service"));
+        String url = getNextServiceUrl("auth_service");
+        urls.remove(url);
+
+        url = url + "/user/v1/balance";
+        urls.replaceAll(s -> s + "/user/v1/balance");
+        return postWithAuth(url, urls, token, request);
     }
 
     @PutMapping("/user/v1/balance")
     public ResponseEntity<String> updateBalance(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
-        String url = getNextServiceUrl("auth_service") + "/user/v1/balance";
-        return putWithAuth(url, token, request);
+        List<String> urls = new ArrayList<>(services.get("auth_service"));
+        String url = getNextServiceUrl("auth_service");
+        urls.remove(url);
+
+        url = url + "/user/v1/balance";
+        urls.replaceAll(s -> s + "/user/v1/balance");
+
+        return putWithAuth(url, urls, token, request);
     }
 
-    private ResponseEntity<String> postWithAuth(String url, String token, Map<String, Object> request) {
+    private ResponseEntity<String> postWithAuth(String url, List<String> other_urls, String token, Map<String, Object> request) {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", token); // Set the Authorization header with Bearer prefix
         headers.setContentType(MediaType.APPLICATION_JSON); // Set the content type to JSON
 
-        return RetryUtils.retryRequest(() -> {
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-            return restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-        }, url, 3);
+        List<String> allUrls = new ArrayList<>();
+        allUrls.add(url);
+        allUrls.addAll(other_urls);
+
+        for (String serviceUrl : allUrls) {
+            try {
+                System.out.println("Trying service URL: " + serviceUrl);
+
+                // Retry the request for the current URL
+                ResponseEntity<String> response = RetryUtils.retryRequest(() -> {
+                    HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+                    return restTemplate.exchange(serviceUrl, HttpMethod.POST, entity, String.class);
+                }, serviceUrl, 3);
+                // If the request is successful, return the response
+                if (response.getStatusCode() != HttpStatus.REQUEST_TIMEOUT && response.getStatusCode() != HttpStatus.INTERNAL_SERVER_ERROR) {
+                    return response;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        System.out.println("All services failed:");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("All services are down:");
     }
 
-    private ResponseEntity<String> putWithAuth(String url, String token, Map<String, Object> request) {
+    private ResponseEntity<String> putWithAuth(String url, List<String> other_urls, String token, Map<String, Object> request) {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", token); // Set the Authorization header with Bearer prefix
         headers.setContentType(MediaType.APPLICATION_JSON); // Set the content type to JSON
 
-        return RetryUtils.retryRequest(() -> {
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-            return restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
-        }, url, 3);
+        List<String> allUrls = new ArrayList<>();
+        allUrls.add(url);
+        allUrls.addAll(other_urls);
+
+        for (String serviceUrl : allUrls) {
+            try {
+                System.out.println("Trying service URL: " + serviceUrl);
+
+                // Retry the request for the current URL
+                ResponseEntity<String> response = RetryUtils.retryRequest(() -> {
+                    HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+                    return restTemplate.exchange(serviceUrl, HttpMethod.PUT, entity, String.class);
+                }, serviceUrl, 3);
+                // If the request is successful, return the response
+                if (response.getStatusCode() != HttpStatus.REQUEST_TIMEOUT && response.getStatusCode() != HttpStatus.INTERNAL_SERVER_ERROR) {
+                    return response;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        System.out.println("All services failed:");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("All services are down:");
     }
 
-    private ResponseEntity<String> getWithAuth(String url, String token) {
+    private ResponseEntity<String> getWithAuth(String url, List<String> other_urls, String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.add("Authorization", token); // Set the Authorization header with Bearer prefix
 
-        return RetryUtils.retryRequest(() -> {
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            return restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-        }, url, 3);
+        List<String> allUrls = new ArrayList<>();
+        allUrls.add(url);
+        allUrls.addAll(other_urls);
+        for (String serviceUrl : allUrls) {
+            try {
+                System.out.println("Trying service URL: " + serviceUrl);
+
+                // Retry the request for the current URL
+                ResponseEntity<String> response = RetryUtils.retryRequest(() -> {
+                    HttpEntity<Void> entity = new HttpEntity<>(headers);
+                    return restTemplate.exchange(serviceUrl, HttpMethod.GET, entity, String.class);
+                }, serviceUrl, 3);
+
+                // If the request is successful, return the response
+                if (response.getStatusCode() != HttpStatus.REQUEST_TIMEOUT && response.getStatusCode() != HttpStatus.INTERNAL_SERVER_ERROR) {
+                    return response;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        System.out.println("All services failed:");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("All services are down:");
     }
 
-    private ResponseEntity<String> postRequest(String url, Map<String, String> request) {
-        return RetryUtils.retryRequest(() -> restTemplate.postForEntity(url, request, String.class), url, 3);
+    private ResponseEntity<String> postRequest(String url, List<String> other_urls, Map<String, String> request) {
+        List<String> allUrls = new ArrayList<>();
+        allUrls.add(url);
+        allUrls.addAll(other_urls);
+        for (String serviceUrl : allUrls) {
+            try {
+                System.out.println("Trying service URL: " + serviceUrl);
+
+                // Retry the request for the current URL
+                ResponseEntity<String> response = RetryUtils.retryRequest(() -> restTemplate.postForEntity(serviceUrl, request, String.class), serviceUrl, 3);
+                // If the request is successful, return the response
+                if (response.getStatusCode() != HttpStatus.REQUEST_TIMEOUT && response.getStatusCode() != HttpStatus.INTERNAL_SERVER_ERROR) {
+                    return response;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        System.out.println("All services failed:");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("All services are down:");
     }
 
-    private ResponseEntity<String> getStringResponseEntity(String url) {
-        return RetryUtils.retryRequest(() -> restTemplate.getForEntity(url, String.class), url, 3);
+    private ResponseEntity<String> getStringResponseEntity(String url, List<String> other_urls) {
+        List<String> allUrls = new ArrayList<>();
+        allUrls.add(url);
+        allUrls.addAll(other_urls);
+
+        for (String serviceUrl : allUrls) {
+            try {
+                System.out.println("Trying service URL: " + serviceUrl);
+
+                // Retry the request for the current URL
+                ResponseEntity<String> response = RetryUtils.retryRequest(() -> restTemplate.getForEntity(serviceUrl, String.class), serviceUrl, 3);
+                // If the request is successful, return the response
+                if (response.getStatusCode() != HttpStatus.REQUEST_TIMEOUT && response.getStatusCode() != HttpStatus.INTERNAL_SERVER_ERROR) {
+                    return response;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        System.out.println("All services failed:");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("All services are down:");
     }
 }

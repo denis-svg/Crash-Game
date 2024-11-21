@@ -28,7 +28,7 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 
 salt = "0000000000000000000fa3b65e43e4240d71762a5bf397d5304b2596d116859c"
 
-AUTH_SERVICE_URL = "http://auth_service_1:5000"
+AUTH_SERVICE_URL = "http://gateway:8080"
 
 @app.route('/metrics')
 def metrics():
@@ -57,7 +57,7 @@ def register_service(service_type, service_id, retries=5, delay=5):
 
 def validate_token(token):
     """ Validate JWT token with the auth service and retrieve user information. """
-    response = requests.get(f"{AUTH_SERVICE_URL}/user/v1/auth/validate", headers={"Authorization": f"Bearer {token}"})
+    response = requests.get(f"{AUTH_SERVICE_URL}/gateway/user/v1/auth/validate", headers={"Authorization": f"Bearer {token}"})
     if response.status_code == 200:
         return response.json()
     return None
