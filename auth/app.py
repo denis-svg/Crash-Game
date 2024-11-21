@@ -7,15 +7,16 @@ import argparse
 import time
 import requests
 from prometheus_flask_exporter import PrometheusMetrics
+import redis
 
 app = Flask(__name__)
 app.config.from_object(Config)
-
 db.init_app(app)
 
 # JWT Setup
 jwt = JWTManager(app)
 metrics = PrometheusMetrics(app)
+redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
 
 # Register service with Service Discovery
 def register_service(service_type, service_id, retries=5, delay=5):
@@ -131,6 +132,46 @@ def update_balance():
         return jsonify({"message": "Balance updated"}), 200
 
     return jsonify({"error": "User not found"}), 404
+
+@app.route('/user/v1/balance/prepare', methods=['POST'])
+@jwt_required()
+def prepare_balance():
+    data = request.json
+    user_id = get_jwt_identity()
+    amount = data['amount']
+
+    user = User.query.get(user_id)
+    if not user or user.balance + amount < 0:
+        return jsonify({"error": "Insufficient funds or user not found"}), 400
+
+    redis_client.set(f"prepare:{user_id}", amount)
+    return jsonify({"status": "Prepared"}), 200
+
+@app.route('/user/v1/balance/commit', methods=['POST'])
+@jwt_required()
+def commit_balance():
+    data = request.json
+    user_id = get_jwt_identity()
+
+    prepared_amount = redis_client.get(f"prepare:{user_id}")
+    if prepared_amount is None:
+        return jsonify({"error": "No prepared transaction"}), 400
+
+    user = User.query.get(user_id)
+    user.balance += float(prepared_amount)
+    db.session.commit()
+
+    redis_client.delete(f"prepare:{user_id}")
+    return jsonify({"status": "Committed"}), 200
+
+@app.route('/user/v1/balance/abort', methods=['POST'])
+@jwt_required()
+def abort_balance():
+    data = request.json
+    user_id = get_jwt_identity()
+
+    redis_client.delete(f"prepare:{user_id}")
+    return jsonify({"status": "Aborted"}), 200
 
 @app.route('/user/v1/auth/validate', methods=['GET'])
 @jwt_required()

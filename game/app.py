@@ -123,67 +123,88 @@ def handle_join_room(data):
     print(redis_client.smembers(f"room:{lobby_id}"))
     emit(f'Joined room: {lobby_id}', room=request.sid)
 
+def prepare_balance_update(user_id, token, amount):
+    """Initiates the prepare phase in the 2PC process with the auth service."""
+    prepare_url = f"{"http://auth_service_1:5000"}/user/v1/balance/prepare"
+    try:
+        response = requests.post(prepare_url, json={"user_id": user_id, "amount": -amount}, headers={"Authorization": f"Bearer {token}"})
+    except Exception as e:
+        return False
+    if response.status_code == 200:
+        return True
+    return False
+
+def commit_balance_update(user_id, token, amount):
+    """Commits the balance update in the 2PC process."""
+    commit_url = f"{"http://auth_service_1:5000"}/user/v1/balance/commit"
+    try:
+        response = requests.post(commit_url, json={"user_id": user_id, "amount": -amount}, headers={"Authorization": f"Bearer {token}"})
+    except Exception as e:
+        return False
+    if response.status_code == 200:
+        return True
+    return False
+
+def abort_balance_update(user_id, token):
+    """Aborts the balance update in the 2PC process."""
+    abort_url = f"{"http://auth_service_1:5000"}/user/v1/balance/abort"
+    try:
+        response = requests.post(abort_url, json={"user_id": user_id}, headers={"Authorization": f"Bearer {token}"})
+    except Exception as e:
+        return False
+    return response.status_code == 200
+
 @socketio.on('place_bet')
 def handle_place_bet(data):
-    token = data['token']  # Get token from data
-    user_info = validate_token(token)  # Validate token
+    token = data['token']
+    user_info = validate_token(token)
     if not user_info:
         emit('error', {'message': 'Invalid token'})
         return
-    
+
     user_id = user_info['user_id']
     lobby_id = data['lobby_id']
     amount = float(data['amount'])
     coefficient = data['coefficient']
 
-    # Check user balance
-    balance_response = requests.get(f"{AUTH_SERVICE_URL}/user/v1/balance", headers={"Authorization": f"Bearer {token}"})
-    if balance_response.status_code == 200:
-        balance = balance_response.json()['balance']
-        if amount > balance:
-            emit('error', {'message': 'Insufficient balance'})
-            return
-    else:
-        emit('error', {'message': 'Unable to check balance'})
-        return
-
-    # Find the lobby in the database
     lobby = db.session.get(Lobby, lobby_id)
     if not lobby:
         emit('error', {'message': 'Lobby does not exist'})
         return
 
-    # Check if the game is in progress
     if lobby.in_progress:
         emit('error', {'message': 'Cannot place a bet. The game is already in progress.'})
         return
 
-    # Calculate the total amount of bets the user has placed across all lobbies that are not withdrawn
-    user_bets = Bet.query.filter_by(user_id=user_id, withdrawn=False).all()
-    total_user_bets = sum(bet.amount for bet in user_bets)
-    print(total_user_bets)
-
-    # Ensure the new bet does not exceed the total of user's existing bets
-    if balance < total_user_bets + amount:  # Check if total_user_bets is less than the new bet amount
-        emit('error', {'message': 'The sum of all your bets cannot be lower than the bet you want to place.'})
+    # Prepare phase: Check if the auth service agrees to the balance update
+    if not prepare_balance_update(user_id, token, amount):
+        emit('error', {'message': 'Failed to reserve balance for the bet. Please try again.'})
         return
-    
-    # Save the token in Redis with user_id as the key
-    redis_client.set(f"user_token:{user_id}", token)
 
-    # Store the bet in the database without the token
-    bet = Bet(user_id=user_id, lobby_id=lobby_id, amount=amount, coefficient=coefficient)
-    db.session.add(bet)
-    db.session.commit()
+    try:
+        # Save the bet in the database
+        bet = Bet(user_id=user_id, lobby_id=lobby_id, amount=amount, coefficient=coefficient)
+        db.session.add(bet)
+        db.session.commit()
+        # Commit phase: Apply the balance update
+        if not commit_balance_update(user_id, token, amount):
+            raise Exception("Failed to commit balance update")
+        
+        redis_client.set(f"user_token:{user_id}", token)
+        redis_client.set(f"user_sid:{request.sid}", user_id)
 
-    redis_client.set(f"user_sid:{request.sid}", user_id)
+        # Check if there are any non-withdrawn bets to start the game
+        active_bets = Bet.query.filter_by(lobby_id=lobby_id, withdrawn=False).all()
+        if len(active_bets) == 1:  # Start game logic when there is at least one non-withdrawn bet
+            threading.Thread(target=start_game, args=(lobby_id,)).start()
 
-    # Check if there are any non-withdrawn bets to start the game
-    active_bets = Bet.query.filter_by(lobby_id=lobby_id, withdrawn=False).all()
-    if len(active_bets) == 1:  # Start game logic when there is at least one non-withdrawn bet
-        threading.Thread(target=start_game, args=(lobby_id,)).start()
-
-    emit('bet_placed', {'user_id': user_id, 'amount': amount, 'coefficient': coefficient})
+        emit('bet_placed', {'user_id': user_id, 'amount': amount, 'coefficient': coefficient})
+        
+    except Exception as e:
+        # Abort phase: Rollback the prepare state
+        abort_balance_update(user_id, token)
+        db.session.rollback()
+        emit('error', {'message': f'Error placing bet: {str(e)}'})
 
 # Withdraw bet during the game
 @socketio.on('withdraw')
@@ -238,7 +259,7 @@ def start_game(lobby_id):
                     for bet in bets:
                         bet.withdrawn = True
                         bet.withdrawal_coefficient = rising_coefficient
-                        payout = bet.amount * rising_coefficient - bet.amount
+                        payout = bet.amount * rising_coefficient
                         db.session.commit()
                         socketio.emit('bet_result', {'user_id': user_id, 'result': 'win', 'payout': payout}, room=user_id)
                         
@@ -267,7 +288,7 @@ def start_game(lobby_id):
                 else:
                     if bet.user_id not in user_balances:
                         user_balances[bet.user_id] = 0  # No payout since they lost
-                    user_balances[bet.user_id] += bet.amount * bet.coefficient - bet.amount
+                    user_balances[bet.user_id] += bet.amount * bet.coefficient
 
         db.session.commit()
         
@@ -277,7 +298,7 @@ def start_game(lobby_id):
             token = redis_client.get(f"user_token:{user_id}")
             if token:
                 # Update user balance using the PUT method
-                requests.put(f"{AUTH_SERVICE_URL}/user/v1/balance", json={"ammount": balance_change}, headers={"Authorization": f"Bearer {token}"})
+                requests.put(f"{AUTH_SERVICE_URL}/gateway/user/v1/balance", json={"ammount": balance_change}, headers={"Authorization": f"Bearer {token}"})
 
         lobby.in_progress = False
         # Update the lobby's hash for the next game
