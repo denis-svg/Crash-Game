@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "auth_services"
+    static_configs:
+      - targets: ["auth_service_1:5000", "auth_service_2:5000"]
+
+  - job_name: "game_services"
+    static_configs:
+      - targets: ["game_service_1:5000", "game_service_2:5000"]
+
+  - job_name: "gate"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["gateway:8080"]

@@ -6,6 +6,7 @@ from config import Config
 import argparse
 import time
 import requests
+from prometheus_flask_exporter import PrometheusMetrics
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -14,6 +15,7 @@ db.init_app(app)
 
 # JWT Setup
 jwt = JWTManager(app)
+metrics = PrometheusMetrics(app)
 
 # Register service with Service Discovery
 def register_service(service_type, service_id, retries=5, delay=5):
@@ -35,6 +37,10 @@ def register_service(service_type, service_id, retries=5, delay=5):
         time.sleep(delay)
 
     print("Service registration failed after maximum retries.")
+
+@app.route('/metrics')
+def metrics():
+    return metrics.registry.generate_latest()
 
 @app.route('/user/v1/status', methods=['GET'])
 def status():

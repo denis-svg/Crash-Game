@@ -6,6 +6,7 @@ def create_database_if_not_exists():
     db = MySQLdb.connect(host="mysql_game", user="root", passwd="1111")
 
     c = db.cursor()
+    # c.execute("DROP DATABASE IF EXISTS game_db")
     c.execute(f"CREATE DATABASE IF NOT EXISTS game_db")
 
     db.close()

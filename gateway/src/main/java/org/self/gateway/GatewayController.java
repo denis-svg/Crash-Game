@@ -155,7 +155,6 @@ public class GatewayController {
     @PostMapping("/game/v1/lobby")
     public ResponseEntity<String> game_lobby(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
         String url = getNextServiceUrl("game_service") + "/game/v1/lobby";
-
         // Make the HTTP request and get the response
         return postWithAuth(url, token, request);
     }

@@ -11,9 +11,11 @@ import os
 import redis
 import requests
 import argparse
+from prometheus_flask_exporter import PrometheusMetrics
 
 app = Flask(__name__)
 app.config.from_object(Config)
+metrics = PrometheusMetrics(app)
 
 db.init_app(app)
 
@@ -27,6 +29,10 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 salt = "0000000000000000000fa3b65e43e4240d71762a5bf397d5304b2596d116859c"
 
 AUTH_SERVICE_URL = "http://auth_service_1:5000"
+
+@app.route('/metrics')
+def metrics():
+    return metrics.registry.generate_latest()
 
 # Register service with Service Discovery
 def register_service(service_type, service_id, retries=5, delay=5):
@@ -84,7 +90,7 @@ def join_lobby():
     if not lobby:
         # Create a new lobby if it doesn't exist
         initial_hash = create_initial_hash()
-        new_lobby = Lobby(initial_hash=initial_hash, current_hash=initial_hash)
+        new_lobby = Lobby(initial_hash=initial_hash, current_hash=initial_hash, port=port)
         db.session.add(new_lobby)
         db.session.commit()
         lobby_id = new_lobby.id
@@ -100,7 +106,7 @@ def get_lobby(lobby_id):
     if not lobby:
         abort(404)
     
-    return jsonify({'websocket_url': f"http://localhost:{port}"})
+    return jsonify({'websocket_url': f"http://localhost:{lobby.port}"})
 
 # Handle WebSocket connections for joining a lobby
 @socketio.on('connect')

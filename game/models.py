@@ -7,6 +7,7 @@ class Lobby(db.Model):
     initial_hash = db.Column(db.String(64))
     current_hash = db.Column(db.String(64))
     in_progress = db.Column(db.Boolean, default=False)
+    port = db.Column(db.Integer, nullable=False)
 
     # Relationship to Bet
     bets = db.relationship('Bet', backref='lobby', lazy=True)

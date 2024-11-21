@@ -24,11 +24,12 @@ public class RetryUtils {
                 if (isRetryableStatusCode(statusCode)) {
                     retryCount++;
                     if (retryCount >= maxRetries) {
-                        System.out.println("All retries failed for URL: " + url);
+                        System.out.println("Request failed after " + maxRetries + " retries for URL: " + url + ". Final status code: " + statusCode);
                         return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
                     }
                 } else {
                     // For client-side errors (4xx), don't retry
+                    System.out.println("Client-side error occurred for URL: " + url + ". Status code: " + statusCode);
                     return ResponseEntity.status(statusCode).body(e.getResponseBodyAsString());
                 }
 
@@ -36,14 +37,14 @@ public class RetryUtils {
                 // Retry for timeouts or general connection errors
                 retryCount++;
                 if (retryCount >= maxRetries) {
-                    System.out.println("All retries failed for URL: " + url);
+                    System.out.println("Request failed after " + maxRetries + " retries for URL: " + url + ". Request timed out or connection error.");
                     return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body("An error occurred during the request");
                 }
             } catch (Exception e) {
                 // Catch-all for any other exceptions (optional retries for unknown errors)
                 retryCount++;
                 if (retryCount >= maxRetries) {
-                    System.out.println("All retries failed for URL: " + url);
+                    System.out.println("Request failed after " + maxRetries + " retries for URL: " + url + ". An unknown error occurred.");
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred while processing the request");
                 }
             }
