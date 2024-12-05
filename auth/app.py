@@ -8,6 +8,7 @@ import time
 import requests
 from prometheus_flask_exporter import PrometheusMetrics
 import redis
+from random import choice
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -17,6 +18,18 @@ db.init_app(app)
 jwt = JWTManager(app)
 metrics = PrometheusMetrics(app)
 redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
+
+@app.before_request
+def before_request():
+    """Determine whether to use the master or replica database."""
+    if request.method == "GET" or 'SELECT' in request.method.upper():  # Read queries (GET or SELECT-like)
+        db.session.remove()  # Close the existing session to rebind
+        # Bind the session to a replica for read operations
+        db.session.bind = db.engines[choice(["replica1", "replica2", "replica3"])]
+    else:  # Write queries (POST, PUT, DELETE)
+        db.session.remove()  # Close the existing session to rebind
+        # Bind the session to the master for write operations
+        db.session.bind = db.engines['master']  # Use 'master' from engines dictionary
 
 # Register service with Service Discovery
 def register_service(service_type, service_id, retries=5, delay=5):

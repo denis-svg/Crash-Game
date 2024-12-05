@@ -9,6 +9,10 @@ services:
     depends_on:
       - auth_db
       - gateway
+      - mysql-master
+      - mysql-slave-1
+      - mysql-slave-2
+      - mysql-slave-3
     networks:
       - app_network
     command: sh -c "python3 db_init.py && python3 app.py -st=auth_service -si=1"
@@ -21,6 +25,10 @@ services:
     depends_on:
       - auth_db
       - gateway
+      - mysql-master
+      - mysql-slave-1
+      - mysql-slave-2
+      - mysql-slave-3
     networks:
       - app_network
     command: sh -c "python3 db_init.py && python3 app.py -st=auth_service -si=2"
