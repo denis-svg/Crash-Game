@@ -134,11 +134,69 @@ services:
     depends_on:
       - prometheus
 
+  mysql-master:
+    image: mysql:8.0
+    container_name: mysql-master
+    command: --server-id=1 --log-bin=mysql-bin --binlog-format=row
+    environment:
+      MYSQL_ROOT_PASSWORD: 1111
+      MYSQL_DATABASE: aus
+      MYSQL_USER: replication_user
+      MYSQL_PASSWORD: 1111
+    networks:
+      - app_network
+
+  mysql-slave-1:
+    image: mysql:8.0
+    container_name: mysql-slave-1
+    depends_on:
+      - mysql-master
+    command: --server-id=2 --log-bin=mysql-bin --binlog-format=row
+    environment:
+      MYSQL_ROOT_PASSWORD: 1111
+      MYSQL_DATABASE: aus
+      MYSQL_USER: replication_user
+      MYSQL_PASSWORD: 1111
+    networks:
+      - app_network
+
+  mysql-slave-2:
+    image: mysql:8.0
+    container_name: mysql-slave-2
+    depends_on:
+      - mysql-master
+    command: --server-id=3 --log-bin=mysql-bin --binlog-format=row
+    environment:
+      MYSQL_ROOT_PASSWORD: 1111
+      MYSQL_DATABASE: aus
+      MYSQL_USER: replication_user
+      MYSQL_PASSWORD: 1111
+    networks:
+      - app_network
+
+  mysql-slave-3:
+    image: mysql:8.0
+    container_name: mysql-slave-3
+    depends_on:
+      - mysql-master
+    command: --server-id=4 --log-bin=mysql-bin --binlog-format=row
+    environment:
+      MYSQL_ROOT_PASSWORD: 1111
+      MYSQL_DATABASE: aus
+      MYSQL_USER: replication_user
+      MYSQL_PASSWORD: 1111
+    networks:
+      - app_network
+
 # Volumes for MySQL Data Persistence
 volumes:
   auth_db_data:
   game_db_data:
   grafana_data:
+  mysql-slave-3:
+  mysql-slave-2:
+  mysql-slave-1:
+  mysql-master:
 
 # Network for inter-service communication
 networks:
