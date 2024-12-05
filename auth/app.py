@@ -118,7 +118,7 @@ def set_balance():
 @jwt_required()
 def update_balance():
     data = request.json
-    ammount = data.get('ammount')
+    ammount = data.get('amount')
 
     if ammount is None:
         return jsonify({"error": "Ammount is required"}), 400

@@ -13,8 +13,10 @@ from hashring import HashRing
 import requests
 import argparse
 from prometheus_flask_exporter import PrometheusMetrics
+import logging
 
 app = Flask(__name__)
+app.logger.setLevel(logging.DEBUG)
 app.config.from_object(Config)
 metrics = PrometheusMetrics(app)
 
@@ -169,6 +171,23 @@ def abort_balance_update(user_id, token):
         return False
     return response.status_code == 200
 
+# Route to join or create a lobby via HTTP
+@app.route('/game/v1/bet', methods=['POST'])
+def place_bet():
+    data = request.json
+    user_id = data.get("user_id")
+    lobby_id = data.get("lobby_id")
+    amount = data.get("amount")
+    coefficient = data.get("coefficient")
+    try:
+        bet = Bet(user_id=user_id, lobby_id=lobby_id, amount=amount, coefficient=coefficient)
+        db.session.add(bet)
+        db.session.commit()
+        return jsonify({"message": "Created bet"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error":str(e)}), 400
+
 @socketio.on('place_bet')
 def handle_place_bet(data):
     token = data['token']
@@ -190,39 +209,28 @@ def handle_place_bet(data):
     if lobby.in_progress:
         emit('error', {'message': 'Cannot place a bet. The game is already in progress.'})
         return
-
-    # Prepare phase: Check if the auth service agrees to the balance update
-    if not prepare_balance_update(user_id, token, amount):
-        emit('error', {'message': 'Failed to reserve balance for the bet. Please try again.'})
+    
+    response = requests.post(f"{AUTH_SERVICE_URL}/gateway/start_bet_saga", json={"user_id": user_id, "lobby_id":lobby_id, 
+                                                                                 "amount":amount, "coefficient":coefficient}, 
+                                                                                 headers={"Authorization": f"Bearer {token}"})
+    if response.status_code != 200:
+        emit('error', {"statuscode" : str(response.status_code)})
         return
+    
+    redis_client = get_redis_client(f"user_token:{user_id}")
+    redis_client.set(f"user_token:{user_id}", token)
 
-    try:
-        # Save the bet in the database
-        bet = Bet(user_id=user_id, lobby_id=lobby_id, amount=amount, coefficient=coefficient)
-        db.session.add(bet)
-        db.session.commit()
-        # Commit phase: Apply the balance update
-        if not commit_balance_update(user_id, token, amount):
-            raise Exception("Failed to commit balance update")
-        
-        redis_client = get_redis_client(f"user_token:{user_id}")
-        redis_client.set(f"user_token:{user_id}", token)
+    redis_client = get_redis_client(f"user_sid:{request.sid}")
+    redis_client.set(f"user_sid:{request.sid}", user_id)
 
-        redis_client = get_redis_client(f"user_sid:{request.sid}")
-        redis_client.set(f"user_sid:{request.sid}", user_id)
+    # Check if there are any non-withdrawn bets to start the game
+    db.session.commit()
+    active_bets = Bet.query.filter_by(lobby_id=lobby_id, withdrawn=False).all()
+    app.logger.debug(f"This is a debug message {active_bets}")
+    if len(active_bets) == 1:  # Start game logic when there is at least one non-withdrawn bet
+        threading.Thread(target=start_game, args=(lobby_id,)).start()
 
-        # Check if there are any non-withdrawn bets to start the game
-        active_bets = Bet.query.filter_by(lobby_id=lobby_id, withdrawn=False).all()
-        if len(active_bets) == 1:  # Start game logic when there is at least one non-withdrawn bet
-            threading.Thread(target=start_game, args=(lobby_id,)).start()
-
-        emit('bet_placed', {'user_id': user_id, 'amount': amount, 'coefficient': coefficient})
-        
-    except Exception as e:
-        # Abort phase: Rollback the prepare state
-        abort_balance_update(user_id, token)
-        db.session.rollback()
-        emit('error', {'message': f'Error placing bet: {str(e)}'})
+    emit('bet_placed', {'user_id': user_id, 'amount': amount, 'coefficient': coefficient})
 
 # Withdraw bet during the game
 @socketio.on('withdraw')
@@ -332,13 +340,11 @@ def start_game(lobby_id):
             if not bet.withdrawn:
                 bet.withdrawn = True
                 if bet.coefficient > crash_point:
-                    # Calculate the loss for users who did not withdraw
                     if bet.user_id not in user_balances:
-                        user_balances[bet.user_id] = 0  # No payout since they lost
-                    user_balances[bet.user_id] -= bet.amount  # Subtract the bet amount
+                        user_balances[bet.user_id] = 0 
                 else:
                     if bet.user_id not in user_balances:
-                        user_balances[bet.user_id] = 0  # No payout since they lost
+                        user_balances[bet.user_id] = 0
                     user_balances[bet.user_id] += bet.amount * bet.coefficient
 
         db.session.commit()
@@ -350,7 +356,7 @@ def start_game(lobby_id):
             token = redis_client.get(f"user_token:{user_id}").decode('utf-8')
             if token:
                 # Update user balance using the PUT method
-                requests.put(f"{AUTH_SERVICE_URL}/gateway/user/v1/balance", json={"ammount": balance_change}, headers={"Authorization": f"Bearer {token}"})
+                requests.put(f"{AUTH_SERVICE_URL}/gateway/user/v1/balance", json={"amount": balance_change}, headers={"Authorization": f"Bearer {token}"})
 
         lobby.in_progress = False
         # Update the lobby's hash for the next game

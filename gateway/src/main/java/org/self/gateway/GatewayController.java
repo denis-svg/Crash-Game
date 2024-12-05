@@ -1,5 +1,7 @@
 package org.self.gateway;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.bind.annotation.*;
@@ -147,6 +149,64 @@ public class GatewayController {
 
         // Make the HTTP request and get the response
         return getStringResponseEntity(url, urls);
+    }
+
+    @PostMapping("/start_bet_saga")
+    public ResponseEntity<String> start_bet_saga(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request) {
+        double amount = Double.parseDouble(request.get("amount").toString());
+
+        ResponseEntity<String> response0 = getBalance(token);
+        if (!response0.getStatusCode().is2xxSuccessful()) {
+            return ResponseEntity.status(response0.getStatusCode()).body("Failed to retrieve balance: " + response0.getBody());
+        }
+        String responseBody = response0.getBody();
+        double currentBalance;
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> balanceResponse = objectMapper.readValue(responseBody, new TypeReference<>() {});
+            currentBalance = Double.parseDouble(balanceResponse.get("balance").toString());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to parse balance: " + e.getMessage());
+        }
+        // Check if the user has sufficient funds
+        if (currentBalance < amount) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Insufficient funds to place the bet. Current balance: " + currentBalance);
+        }
+
+        // Step 1: Update balance
+        Map<String, Object> revertRequest = new HashMap<>(request);
+        revertRequest.put("amount", -amount);
+        ResponseEntity<String> response1 = updateBalance(token, revertRequest);
+        if (!response1.getStatusCode().is2xxSuccessful()) {
+            // Return early if updating the balance fails
+            return ResponseEntity.status(response1.getStatusCode()).body("Failed to update balance: " + response1.getBody());
+        }
+
+        // Step 2: Place the bet
+        ResponseEntity<String> response2 = place_bet(token, request);
+        if (!response2.getStatusCode().is2xxSuccessful()) {
+            // Revert the balance if placing the bet fails
+            ResponseEntity<String> rollbackResponse = updateBalance(token, request);
+            if (!rollbackResponse.getStatusCode().is2xxSuccessful()) {
+                return ResponseEntity.status(rollbackResponse.getStatusCode())
+                        .body("Failed to revert balance after bet failure: " + rollbackResponse.getBody());
+            }
+            return ResponseEntity.status(response2.getStatusCode()).body("Failed to place bet: " + response2.getBody());
+        }
+
+        // Success response
+        return ResponseEntity.ok("Bet placed successfully");
+    }
+
+    @PostMapping("/game/v1/bet")
+    private ResponseEntity<String> place_bet(@RequestHeader("Authorization") String token, @RequestBody Map<String, Object> request)
+    {
+        List<String> urls = new ArrayList<>(services.get("game_service"));
+        String url = getNextServiceUrl("game_service");
+        urls.remove(url);
+        url = url + "/game/v1/bet";
+        urls.replaceAll(s -> s + "/game/v1/bet");
+        return postWithAuth(url, urls, token, request);
     }
 
     @GetMapping("/game/v1/status")
