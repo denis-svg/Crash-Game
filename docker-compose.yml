@@ -60,10 +60,21 @@ services:
       - app_network
 
 # Redis Service
-  redis:
+  redis-node-1:
     image: redis:latest
-    container_name: redis
-    restart: always
+    container_name: redis-node-1
+    networks:
+      - app_network
+
+  redis-node-2:
+    image: redis:latest
+    container_name: redis-node-2
+    networks:
+      - app_network
+
+  redis-node-3:
+    image: redis:latest
+    container_name: redis-node-3
     networks:
       - app_network
 

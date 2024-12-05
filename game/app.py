@@ -9,6 +9,7 @@ import time
 import threading
 import os
 import redis
+from hashring import HashRing
 import requests
 import argparse
 from prometheus_flask_exporter import PrometheusMetrics
@@ -22,7 +23,20 @@ db.init_app(app)
 port = None
 
 # Connect to Redis
-redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
+#redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
+nodes = {
+    'redis-node-1': {'host': 'redis-node-1', 'port': 6379},
+    'redis-node-2': {'host': 'redis-node-2', 'port': 6379},
+    'redis-node-3': {'host': 'redis-node-3', 'port': 6379},
+}
+
+redis_clients = {name: redis.Redis(**config) for name, config in nodes.items()}
+
+ring = HashRing(redis_clients.keys())
+
+def get_redis_client(key):
+    node_name = ring.get_node(key)
+    return redis_clients[node_name]
 
 socketio = SocketIO(app, cors_allowed_origins='*')
 
@@ -119,6 +133,7 @@ def handle_join_room(data):
     print(data)
 
     # Store the room in Redis
+    redis_client = get_redis_client(f"room:{lobby_id}")
     redis_client.sadd(f"room:{lobby_id}", request.sid)
     print(redis_client.smembers(f"room:{lobby_id}"))
     emit(f'Joined room: {lobby_id}', room=request.sid)
@@ -190,7 +205,10 @@ def handle_place_bet(data):
         if not commit_balance_update(user_id, token, amount):
             raise Exception("Failed to commit balance update")
         
+        redis_client = get_redis_client(f"user_token:{user_id}")
         redis_client.set(f"user_token:{user_id}", token)
+
+        redis_client = get_redis_client(f"user_sid:{request.sid}")
         redis_client.set(f"user_sid:{request.sid}", user_id)
 
         # Check if there are any non-withdrawn bets to start the game
@@ -222,10 +240,42 @@ def handle_withdraw(data):
     bet = Bet.query.filter_by(user_id=user_id, lobby_id=lobby_id, withdrawn=False).first()
     if bet:
         # Mark the bet as "requested to withdraw" in Redis
+        redis_client = get_redis_client(f"withdrawals:{user_id}")
         redis_client.set(f"withdrawals:{user_id}", lobby_id)
         emit('withdraw_requested', {'user_id': user_id, 'message': 'Withdraw requested'})
     else:
         emit('error', {'message': 'No active bet found to withdraw'}, room=request.sid)
+
+def get_all_user_sids():
+    all_user_sids = []
+    
+    for client in redis_clients.values():
+        keys = client.keys('user_sid:*')
+        for key in keys:
+            all_user_sids.append(key.decode('utf-8'))
+
+    return all_user_sids
+
+def get_user_ids(lobby_id):
+    redis_client = get_redis_client(f"room:{lobby_id}")
+    
+    user_ids = redis_client.smembers(f"room:{lobby_id}")
+    
+    return [user_id.decode('utf-8') for user_id in user_ids]
+
+def check_withdrawal_exists(user_id):
+    redis_client = get_redis_client(f"withdrawals:{user_id}")
+    
+    exists = redis_client.exists(f"withdrawals:{user_id}")
+    
+    return exists
+
+def delete_withdrawal(user_id):
+    redis_client = get_redis_client(f"withdrawals:{user_id}")
+    
+    redis_client.delete(f"withdrawals:{user_id}")
+    
+    print(f"Deleted withdrawals:{user_id} from the appropriate Redis node.")
 
 def start_game(lobby_id):
     with app.app_context():
@@ -246,13 +296,14 @@ def start_game(lobby_id):
         # Emit rising coefficient until the crash point is reached
         while rising_coefficient <= crash_point:
             time.sleep(0.05)
-            
+            user_sids = []
             # Check for withdrawal requests in Redis
-            user_sids = redis_client.keys('user_sid:*')
-            user_ids = redis_client.smembers(f"room:{lobby_id}")
+            user_sids = get_all_user_sids()
+            user_ids = get_user_ids(lobby_id)
             for user_sid in user_sids:
-                user_id = redis_client.get(user_sid)
-                if redis_client.exists(f"withdrawals:{user_id}"):
+                redis_client = get_redis_client(user_sid)
+                user_id = redis_client.get(user_sid).decode('utf-8')
+                if check_withdrawal_exists(user_id):
                     print(user_id, lobby_id)
                     # Withdraw all bets for this user
                     bets = Bet.query.filter_by(user_id=user_id, lobby_id=lobby_id, withdrawn=False).all()
@@ -269,7 +320,7 @@ def start_game(lobby_id):
                         user_balances[user_id] += payout
 
                     # Remove the user from withdrawals once processed
-                    redis_client.delete(f"withdrawals:{user_id}", lobby_id)
+                    delete_withdrawal(user_id)
 
             for user in user_ids:
                 socketio.emit('coefficient_update', {'coefficient': rising_coefficient}, room=user)
@@ -295,7 +346,8 @@ def start_game(lobby_id):
         # Update user balances
         for user_id, balance_change in user_balances.items():
             # Retrieve the token from Redis for the user
-            token = redis_client.get(f"user_token:{user_id}")
+            redis_client = get_redis_client(f"user_token:{user_id}")
+            token = redis_client.get(f"user_token:{user_id}").decode('utf-8')
             if token:
                 # Update user balance using the PUT method
                 requests.put(f"{AUTH_SERVICE_URL}/gateway/user/v1/balance", json={"ammount": balance_change}, headers={"Authorization": f"Bearer {token}"})
