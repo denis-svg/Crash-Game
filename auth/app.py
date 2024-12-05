@@ -9,8 +9,14 @@ import requests
 from prometheus_flask_exporter import PrometheusMetrics
 import redis
 from random import choice
+from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
+import logging
+from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy import text
 
 app = Flask(__name__)
+app.logger.setLevel(logging.DEBUG)
 app.config.from_object(Config)
 db.init_app(app)
 
@@ -19,17 +25,75 @@ jwt = JWTManager(app)
 metrics = PrometheusMetrics(app)
 redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
 
+# Global variables to store the master and replica engines
+master_engine = None
+replica_engines = []
+
+def initialize_engines():
+    global master_engine, replica_engines
+    
+    # Ensure we are within the Flask application context
+    with app.app_context():
+        try:
+            # Initialize master engine
+            master_engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
+            
+            # Close any previous session
+            db.session.remove()
+            
+            # Initialize replica engines
+            replica_engines = [
+                create_engine(app.config['SQLALCHEMY_BINDS'][key])
+                for key in app.config['SQLALCHEMY_BINDS'].keys() if key != 'master'
+            ]
+        except OperationalError as e:
+            app.logger.debug(f"Error connecting to databases: {e}")
+
+# Initialize the engines when the app starts
+initialize_engines()
+app.logger.debug(f"Master {master_engine}")
+app.logger.debug(f"Replicas {replica_engines}")
+
+def get_db_session():
+    if request.method == "GET" or 'SELECT' in request.method.upper():  # Read queries (GET or SELECT)
+        for replica_engine in replica_engines:
+            try:
+                # Using db.session for replica read operations
+                session = scoped_session(sessionmaker(bind=replica_engine))
+                session.execute(text("SELECT 1"))  # Test query to check replica
+                app.logger.debug(f"Session {replica_engine}")
+                return session
+            except OperationalError:
+                continue
+        # If all replicas are down, fallback to the master
+        app.logger.debug(f"All replicas are down")
+        session = scoped_session(sessionmaker(bind=master_engine))
+        return session
+    else:  # Write queries (POST, PUT, DELETE)
+        try:
+            session = scoped_session(sessionmaker(bind=master_engine))
+            session.execute(text("SELECT 1")) # Simple test query to check master
+            app.logger.debug(f"Session {master_engine}")
+            return session
+        except OperationalError:
+            app.logger.debug("Master is down, trying replicas for failover...")
+            # Failover to replicas in case master is down
+            for replica_engine in replica_engines:
+                try:
+                    session = scoped_session(sessionmaker(bind=replica_engine))
+                    session.execute(text("SELECT 1"))
+                    app.logger.debug(f"Session {replica_engine}")
+                    return session
+                except OperationalError:
+                    continue
+            # If all replicas fail, raise an exception
+            raise Exception("All databases (master and replicas) are unavailable.")
+
 @app.before_request
 def before_request():
-    """Determine whether to use the master or replica database."""
-    if request.method == "GET" or 'SELECT' in request.method.upper():  # Read queries (GET or SELECT-like)
-        db.session.remove()  # Close the existing session to rebind
-        # Bind the session to a replica for read operations
-        db.session.bind = db.engines[choice(["replica1", "replica2", "replica3"])]
-    else:  # Write queries (POST, PUT, DELETE)
-        db.session.remove()  # Close the existing session to rebind
-        # Bind the session to the master for write operations
-        db.session.bind = db.engines['master']  # Use 'master' from engines dictionary
+    db.session.remove()  # Remove any previous session
+    session = get_db_session()  # Get session with failover logic
+    db.session = session
 
 # Register service with Service Discovery
 def register_service(service_type, service_id, retries=5, delay=5):
